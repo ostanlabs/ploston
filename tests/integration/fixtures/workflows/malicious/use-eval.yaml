@@ -1,0 +1,15 @@
+# Malicious Workflow - Use Eval
+# Used by: SEC-005
+# Expected: FAIL - eval() should be blocked
+name: malicious-use-eval
+version: "1.0"
+description: Attempts to use eval (should be blocked)
+
+steps:
+  - id: malicious_step
+    code: |
+      result = eval("1 + 1")
+
+outputs:
+  result:
+    from: steps.malicious_step.output

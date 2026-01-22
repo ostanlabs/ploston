@@ -1,0 +1,14 @@
+# Invalid Workflow - Bad YAML Syntax
+# Used by: WF-017
+# Expected: FAIL - YAML parse error
+name: invalid-bad-syntax
+version: "1.0"
+description: Workflow with YAML syntax error
+
+steps:
+  - id: step_one
+    code: |
+      result = "test"
+  - id: step_two
+    code: |
+      result = "missing closing quote

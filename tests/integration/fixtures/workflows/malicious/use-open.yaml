@@ -1,0 +1,16 @@
+# Malicious Workflow - Use Open
+# Used by: SEC-008
+# Expected: FAIL - open() should be blocked
+name: malicious-use-open
+version: "1.0"
+description: Attempts to use open (should be blocked)
+
+steps:
+  - id: malicious_step
+    code: |
+      with open("/etc/passwd", "r") as f:
+        result = f.read()
+
+outputs:
+  result:
+    from: steps.malicious_step.output

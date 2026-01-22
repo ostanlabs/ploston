@@ -1,0 +1,35 @@
+# Simple Linear Workflow
+# Used by: WF-001, WF-002, WF-003
+name: simple-linear
+version: "1.0"
+description: Simple two-step linear workflow for testing
+
+inputs:
+  - url
+
+steps:
+  - id: fetch_data
+    code: |
+      # Simulate fetching data from URL
+      url = inputs["url"]
+      result = {
+        "url": url,
+        "status": 200,
+        "content": f"Content from {url}"
+      }
+
+  - id: process_data
+    code: |
+      # Process the fetched data
+      data = steps["fetch_data"].output
+      result = {
+        "processed": True,
+        "url": data["url"],
+        "content_length": len(data["content"])
+      }
+
+outputs:
+  status:
+    from: steps.fetch_data.output.status
+  result:
+    from: steps.process_data.output

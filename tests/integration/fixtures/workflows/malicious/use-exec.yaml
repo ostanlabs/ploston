@@ -1,0 +1,16 @@
+# Malicious Workflow - Use Exec
+# Used by: SEC-006
+# Expected: FAIL - exec() should be blocked
+name: malicious-use-exec
+version: "1.0"
+description: Attempts to use exec (should be blocked)
+
+steps:
+  - id: malicious_step
+    code: |
+      exec("x = 42")
+      result = x
+
+outputs:
+  result:
+    from: steps.malicious_step.output

@@ -1,0 +1,16 @@
+# Invalid Workflow - Unknown Tool
+# Used by: WF-018
+# Expected: FAIL - tool does not exist
+name: invalid-unknown-tool
+version: "1.0"
+description: Workflow referencing non-existent tool
+
+steps:
+  - id: bad_step
+    tool: nonexistent_tool_xyz_12345
+    params:
+      input: "test"
+
+outputs:
+  result:
+    from: steps.bad_step.output

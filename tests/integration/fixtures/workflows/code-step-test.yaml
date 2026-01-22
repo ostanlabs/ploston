@@ -1,0 +1,38 @@
+# Code Step Workflow
+# Used by: WF-004, WF-005, WF-006
+name: code-step-test
+version: "1.0"
+description: Workflow testing code step execution
+
+inputs:
+  - numbers: "[1, 2, 3, 4, 5]"
+
+steps:
+  - id: parse_input
+    code: |
+      import json
+      numbers_str = inputs.get("numbers", "[1, 2, 3]")
+      result = json.loads(numbers_str)
+
+  - id: calculate_sum
+    code: |
+      numbers = steps["parse_input"].output
+      result = sum(numbers)
+
+  - id: calculate_stats
+    code: |
+      numbers = steps["parse_input"].output
+      total = steps["calculate_sum"].output
+      result = {
+        "sum": total,
+        "count": len(numbers),
+        "average": total / len(numbers) if numbers else 0,
+        "min": min(numbers) if numbers else None,
+        "max": max(numbers) if numbers else None
+      }
+
+outputs:
+  sum:
+    from: steps.calculate_sum.output
+  stats:
+    from: steps.calculate_stats.output

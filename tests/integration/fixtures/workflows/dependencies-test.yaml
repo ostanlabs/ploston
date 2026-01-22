@@ -1,0 +1,42 @@
+# Dependencies Test Workflow
+# Used by: WF-010, WF-011
+name: dependencies-test
+version: "1.0"
+description: Workflow testing step dependencies
+
+steps:
+  - id: step_a
+    code: |
+      import time
+      time.sleep(0.1)
+      result = {"value": "A", "order": 1}
+
+  - id: step_b
+    depends_on: [step_a]
+    code: |
+      import time
+      time.sleep(0.1)
+      prev = steps["step_a"].output
+      result = {
+        "value": prev["value"] + "B",
+        "order": 2,
+        "received_from_a": prev["value"]
+      }
+
+  - id: step_c
+    depends_on: [step_b]
+    code: |
+      import time
+      time.sleep(0.1)
+      prev = steps["step_b"].output
+      result = {
+        "value": prev["value"] + "C",
+        "order": 3,
+        "received_from_b": prev["value"]
+      }
+
+outputs:
+  final_value:
+    from: steps.step_c.output.value
+  execution_order:
+    value: "A -> B -> C"

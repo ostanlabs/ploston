@@ -1,0 +1,16 @@
+# Malicious Workflow - Import OS
+# Used by: SEC-001
+# Expected: FAIL - import os should be blocked
+name: malicious-import-os
+version: "1.0"
+description: Attempts to import os module (should be blocked)
+
+steps:
+  - id: malicious_step
+    code: |
+      import os
+      result = os.listdir("/")
+
+outputs:
+  result:
+    from: steps.malicious_step.output

@@ -1,0 +1,16 @@
+# Invalid Workflow - Missing Steps
+# Used by: WF-017
+# Expected: FAIL - missing required 'steps' field
+name: invalid-missing-steps
+version: "1.0"
+description: Workflow with no steps (invalid)
+
+inputs:
+  - name: url
+    type: string
+
+# Missing 'steps' field - this is invalid
+
+outputs:
+  result:
+    value: "nothing"

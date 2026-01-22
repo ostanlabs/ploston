@@ -1,0 +1,16 @@
+# Malicious Workflow - Import Subprocess
+# Used by: SEC-001
+# Expected: FAIL - import subprocess should be blocked
+name: malicious-import-subprocess
+version: "1.0"
+description: Attempts to import subprocess module (should be blocked)
+
+steps:
+  - id: malicious_step
+    code: |
+      import subprocess
+      result = subprocess.run(["ls", "-la"], capture_output=True).stdout
+
+outputs:
+  result:
+    from: steps.malicious_step.output

@@ -1,0 +1,33 @@
+# AEL Test Configuration
+# Used by integration tests
+
+logging:
+  level: DEBUG
+  format: json
+  components:
+    workflow: true
+    step: true
+    tool: true
+    sandbox: true
+
+tools:
+  # No MCP servers for basic tests - use mocks
+  servers: {}
+  
+  system:
+    python_exec:
+      enabled: true
+      packages:
+        profile: standard
+
+workflows:
+  directory: tests/integration/fixtures/workflows
+  watch: false  # Disabled for tests
+
+execution:
+  defaults:
+    timeout: 30
+    retry:
+      max_attempts: 1
+      backoff: fixed
+      delay_seconds: 1
