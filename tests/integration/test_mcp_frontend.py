@@ -22,11 +22,12 @@ import pytest
 
 # These imports will work once components are implemented
 try:
+    from ploston_core.config import Mode, ModeManager
     from ploston_core.engine import ExecutionResult, WorkflowEngine
     from ploston_core.errors import AELError, ErrorCategory
     from ploston_core.invoker import ToolCallResult, ToolInvoker
     from ploston_core.registry import ToolRegistry
-    from ploston_core.server import MCPFrontend, MCPServerConfig
+    from ploston_core.mcp_frontend import MCPFrontend, MCPServerConfig
     from ploston_core.types import ExecutionStatus
     from ploston_core.workflow import WorkflowDefinition, WorkflowRegistry
 
@@ -162,11 +163,23 @@ def mock_tool_invoker() -> MagicMock:
 
 
 @pytest.fixture
+def mock_mode_manager() -> MagicMock:
+    """Create mock mode manager in running mode."""
+    check_imports()
+
+    manager = MagicMock(spec=ModeManager)
+    manager.mode = Mode.RUNNING
+    manager.on_mode_change = MagicMock()
+    return manager
+
+
+@pytest.fixture
 def mcp_frontend(
     mock_tool_registry,
     mock_workflow_registry,
     mock_workflow_engine,
     mock_tool_invoker,
+    mock_mode_manager,
 ) -> "MCPFrontend":
     """Create MCP frontend with mocks."""
     check_imports()
@@ -182,6 +195,7 @@ def mcp_frontend(
         workflow_registry=mock_workflow_registry,
         tool_invoker=mock_tool_invoker,
         config=config,
+        mode_manager=mock_mode_manager,
     )
 
 
