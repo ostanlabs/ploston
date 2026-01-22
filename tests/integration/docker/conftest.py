@@ -117,3 +117,34 @@ def docker_available(docker_url: str) -> bool:
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
+
+
+@pytest.fixture(scope="module")
+def running_mode_available(docker_client: DockerMCPClient, docker_available: bool) -> bool:
+    """Check if docker-compose AEL is in running mode (not configuration mode)."""
+    if not docker_available:
+        return False
+    try:
+        docker_client.initialize()
+        tools = docker_client.list_tools()
+        tool_names = [t.get("name") for t in tools]
+        # In configuration mode, only config tools are available
+        # In running mode, python_exec should be available
+        return "python_exec" in tool_names
+    except Exception:
+        return False
+
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "requires_running_mode: mark test as requiring running mode (not configuration mode)"
+    )
+
+
+@pytest.fixture(autouse=True)
+def skip_if_requires_running_mode(request, running_mode_available):
+    """Skip tests marked with requires_running_mode if not in running mode."""
+    if request.node.get_closest_marker("requires_running_mode"):
+        if not running_mode_available:
+            pytest.skip("Test requires running mode (server is in configuration mode)")

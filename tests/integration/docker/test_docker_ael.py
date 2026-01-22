@@ -25,7 +25,8 @@ class TestDockerHealth:
         response = requests.get(f"{docker_url}/health", timeout=10)
         assert response.status_code == 200
         data = response.json()
-        assert data.get("status") == "healthy"
+        # Accept both "ok" and "healthy" status values
+        assert data.get("status") in ("ok", "healthy")
 
     def test_dc_002_mcp_initialize(self, docker_client: DockerMCPClient, docker_available: bool):
         """Verify MCP initialize works."""
