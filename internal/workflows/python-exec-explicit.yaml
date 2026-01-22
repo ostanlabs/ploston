@@ -1,0 +1,39 @@
+name: python-exec-explicit
+version: "1.0.0"
+description: Demonstrate both python_exec modes
+
+inputs:
+  - numbers:
+      type: array
+      default: [1, 2, 3, 4, 5]
+
+steps:
+  # Implicit mode: code: block uses system defaults
+  # Access inputs via context.inputs dict
+  - id: implicit_sum
+    code: |
+      numbers = context.inputs["numbers"]
+      result = sum(numbers)
+
+  # Explicit mode: tool: python_exec with custom config
+  # When using tool: python_exec, pass data via context param
+  # Context values become global variables in the sandbox
+  - id: explicit_stats
+    tool: python_exec
+    params:
+      code: |
+        import statistics
+        result = {
+          "mean": statistics.mean(numbers),
+          "stdev": statistics.stdev(numbers) if len(numbers) > 1 else 0
+        }
+      context:
+        numbers: "{{ inputs.numbers }}"
+      timeout: 60
+
+outputs:
+  sum:
+    from: steps.implicit_sum.output
+  stats:
+    from: steps.explicit_stats.output
+

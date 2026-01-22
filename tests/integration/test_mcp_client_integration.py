@@ -67,7 +67,7 @@ def run_mcp_client(*args: str, timeout: int = 60) -> MCPClientResult:
         *args,
     ]
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    # Use installed packages - no need to set PYTHONPATH if packages are installed
 
     result = subprocess.run(
         cmd,
@@ -346,7 +346,8 @@ class TestWorkflowExecution:
         output = result.stdout
         if '"isError": true' in output or '"isError":true' in output:
             # If there's an error, it should be about Kafka not being available
-            assert "Kafka" in output, f"Unexpected error: {output}"
+            kafka_errors = ["Kafka", "kafka", "NoBrokersAvailable", "broker"]
+            assert any(err in output for err in kafka_errors), f"Unexpected error: {output}"
         else:
             # Success case - should have published message
             assert "published" in output.lower() or '"isError": false' in output

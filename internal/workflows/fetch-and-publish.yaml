@@ -1,0 +1,38 @@
+name: fetch-and-publish
+version: "1.0.0"
+description: Fetch URL content and publish to Kafka
+
+inputs:
+  - url
+  - topic:
+      type: string
+      default: "events"
+
+steps:
+  - id: fetch
+    tool: http_request
+    params:
+      url: "{{ inputs.url }}"
+      method: GET
+
+  - id: transform
+    code: |
+      import json
+      raw_output = context.steps["fetch"].output
+      data = json.loads(raw_output) if isinstance(raw_output, str) else raw_output
+      result = {
+        "url": context.inputs["url"],
+        "status": data.get("status_code"),
+        "content_length": data.get("content_length", 0)
+      }
+
+  - id: publish
+    tool: kafka_publish
+    params:
+      topic: "{{ inputs.topic }}"
+      message: "{{ steps.transform.output }}"
+
+outputs:
+  published:
+    from: steps.publish.output
+

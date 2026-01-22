@@ -1,16 +1,17 @@
 """
-CLI Integration Tests for AEL.
+CLI Integration Tests for Ploston.
 
 Test IDs: CLI-001 to CLI-020
 Priority: P1
 
 These tests verify the CLI functionality:
-- ael serve
-- ael run
-- ael validate (deferred for post-MVP)
-- ael workflows list/show
-- ael tools list/show/refresh (deferred for post-MVP)
-- ael config show (deferred for post-MVP)
+- ploston serve
+- ploston run
+- ploston validate
+- ploston workflows list/show
+- ploston tools list/show/refresh
+- ploston config show
+- ploston version
 
 Prerequisites:
 - Component 12 (CLI) must be implemented
@@ -271,9 +272,8 @@ class TestAelRun:
 
 
 class TestAelValidate:
-    """Tests for 'ael validate' command (CLI-007 to CLI-009)."""
+    """Tests for 'ploston validate' command (CLI-007 to CLI-009)."""
 
-    @pytest.mark.skip(reason="'ael validate' command deferred for post-MVP")
     def test_cli_007_validate_valid_workflow(
         self,
         cli_runner: Callable,
@@ -281,7 +281,7 @@ class TestAelValidate:
         valid_workflow_yaml: str,
     ):
         """
-        CLI-007: Verify 'ael validate' passes for valid workflow.
+        CLI-007: Verify 'ploston validate' passes for valid workflow.
         """
         workflow_path = temp_workflow_file(valid_workflow_yaml)
 
@@ -291,44 +291,52 @@ class TestAelValidate:
         output = result.stdout.lower() + result.stderr.lower()
         assert "valid" in output or "success" in output or result.returncode == 0
 
-    @pytest.mark.skip(reason="'ael validate' command deferred for post-MVP")
     def test_cli_008_validate_invalid_yaml(
         self,
         cli_runner: Callable,
         temp_workflow_file: Callable,
     ):
         """
-        CLI-008: Verify 'ael validate' fails for invalid YAML.
+        CLI-008: Verify 'ploston validate' fails for invalid YAML syntax.
         """
+        # This is truly invalid YAML (bad indentation/syntax)
         bad_yaml = """
 name: bad
 steps:
   - id: test
     code: |
-      result = "unclosed string
+      result = "test"
+  - id: broken
+    tool: [invalid: yaml: syntax
 """
         workflow_path = temp_workflow_file(bad_yaml)
 
         result = cli_runner("validate", str(workflow_path))
 
-        # Should fail validation
+        # Should fail validation due to YAML syntax error
         assert result.returncode != 0 or "error" in result.stdout.lower() + result.stderr.lower()
 
-    @pytest.mark.skip(reason="'ael validate' command deferred for post-MVP")
     def test_cli_009_validate_schema_error(
         self,
         cli_runner: Callable,
         temp_workflow_file: Callable,
-        invalid_workflow_yaml: str,
     ):
         """
-        CLI-009: Verify 'ael validate' fails for schema violations.
+        CLI-009: Verify 'ploston validate' fails for schema violations.
         """
-        workflow_path = temp_workflow_file(invalid_workflow_yaml)
+        # Missing required 'name' field
+        invalid_yaml = """
+version: "1.0"
+steps:
+  - id: test
+    code: |
+      result = "test"
+"""
+        workflow_path = temp_workflow_file(invalid_yaml)
 
         result = cli_runner("validate", str(workflow_path))
 
-        # Should fail validation
+        # Should fail validation due to missing name
         assert result.returncode != 0 or "error" in result.stdout.lower() + result.stderr.lower()
 
 
@@ -364,19 +372,17 @@ class TestAelWorkflows:
 
 # =============================================================================
 # Tools Command Tests (CLI-012 to CLI-014)
-# NOTE: 'ael tools' commands are deferred for post-MVP
 # =============================================================================
 
 
 class TestAelTools:
-    """Tests for 'ael tools' commands (CLI-012 to CLI-014)."""
+    """Tests for 'ploston tools' commands (CLI-012 to CLI-014)."""
 
-    @pytest.mark.skip(reason="'ael tools' command deferred for post-MVP")
-    def test_cli_012_tools_list(self, cli_runner: Callable):
+    def test_cli_012_tools_list(self, cli_runner: Callable, test_config_path: str):
         """
-        CLI-012: Verify 'ael tools list' shows available tools.
+        CLI-012: Verify 'ploston tools list' shows available tools.
         """
-        result = cli_runner("tools", "list")
+        result = cli_runner("tools", "list", config=test_config_path)
 
         # Command should work
         assert result.returncode == 0 or "error" not in result.stderr.lower()
@@ -385,13 +391,12 @@ class TestAelTools:
         if result.returncode == 0:
             assert "python_exec" in result.stdout.lower() or "python" in result.stdout.lower()
 
-    @pytest.mark.skip(reason="'ael tools' command deferred for post-MVP")
-    def test_cli_013_tools_show(self, cli_runner: Callable):
+    def test_cli_013_tools_show(self, cli_runner: Callable, test_config_path: str):
         """
-        CLI-013: Verify 'ael tools show <n>' shows tool details.
+        CLI-013: Verify 'ploston tools show <name>' shows tool details.
         """
         # Try to show python_exec (should always exist)
-        result = cli_runner("tools", "show", "python_exec")
+        result = cli_runner("tools", "show", "python_exec", config=test_config_path)
 
         # Should show tool or give helpful error
         output = result.stdout.lower() + result.stderr.lower()
@@ -399,12 +404,11 @@ class TestAelTools:
             # Should have tool info
             assert "python" in output or "exec" in output or "code" in output
 
-    @pytest.mark.skip(reason="'ael tools' command deferred for post-MVP")
-    def test_cli_014_tools_refresh(self, cli_runner: Callable):
+    def test_cli_014_tools_refresh(self, cli_runner: Callable, test_config_path: str):
         """
-        CLI-014: Verify 'ael tools refresh' refreshes tool cache.
+        CLI-014: Verify 'ploston tools refresh' refreshes tool cache.
         """
-        result = cli_runner("tools", "refresh")
+        result = cli_runner("tools", "refresh", config=test_config_path)
 
         # Should work or indicate no servers to refresh
         output = result.stdout.lower() + result.stderr.lower()
@@ -413,19 +417,17 @@ class TestAelTools:
 
 # =============================================================================
 # Config Command Tests (CLI-015)
-# NOTE: 'ael config' command is deferred for post-MVP
 # =============================================================================
 
 
 class TestAelConfig:
-    """Tests for 'ael config' commands (CLI-015)."""
+    """Tests for 'ploston config' commands (CLI-015)."""
 
-    @pytest.mark.skip(reason="'ael config' command deferred for post-MVP")
-    def test_cli_015_config_show(self, cli_runner: Callable):
+    def test_cli_015_config_show(self, cli_runner: Callable, test_config_path: str):
         """
-        CLI-015: Verify 'ael config show' displays configuration.
+        CLI-015: Verify 'ploston config show' displays configuration.
         """
-        result = cli_runner("config", "show")
+        result = cli_runner("config", "show", config=test_config_path)
 
         # Should show config (even if default)
         assert result.returncode == 0 or "config" in result.stdout.lower()
@@ -461,7 +463,6 @@ class TestCLIErrorHandling:
         output = result.stdout.lower() + result.stderr.lower()
         assert "error" in output or "usage" in output or "required" in output or "missing" in output
 
-    @pytest.mark.skip(reason="'ael tools' command deferred for post-MVP")
     def test_cli_018_invalid_config_path(self, cli_runner: Callable):
         """
         CLI-018: Verify invalid config path is handled.
@@ -494,12 +495,11 @@ class TestCLIHelp:
         # Should show available commands
         assert "usage" in output or "commands" in output or "ael" in output
 
-    @pytest.mark.skip(reason="--version flag deferred for post-MVP")
     def test_cli_020_version_flag(self, cli_runner: Callable):
         """
-        CLI-020: Verify --version shows version.
+        CLI-020: Verify 'ploston version' shows version.
         """
-        result = cli_runner("--version")
+        result = cli_runner("version")
 
         # Should show version
         output = result.stdout + result.stderr
@@ -519,21 +519,20 @@ class TestSubcommandHelp:
     """Tests for subcommand help."""
 
     @pytest.mark.parametrize(
-        "subcommand,deferred",
+        "subcommand",
         [
-            ("run", False),
-            ("serve", False),
-            ("workflows", False),
-            ("validate", True),
-            ("tools", True),
-            ("config", True),
+            "run",
+            "serve",
+            "workflows",
+            "validate",
+            "tools",
+            "config",
+            "version",
+            "api",
         ],
     )
-    def test_subcommand_help(self, cli_runner: Callable, subcommand: str, deferred: bool):
+    def test_subcommand_help(self, cli_runner: Callable, subcommand: str):
         """Verify each subcommand has help."""
-        if deferred:
-            pytest.skip(f"'{subcommand}' command deferred for post-MVP")
-
         result = cli_runner(subcommand, "--help")
 
         assert result.returncode == 0
@@ -548,12 +547,12 @@ class TestSubcommandHelp:
 class TestCLIIntegrationScenarios:
     """End-to-end CLI scenarios."""
 
-    @pytest.mark.skip(reason="'ael validate' command deferred for post-MVP")
     def test_full_workflow_lifecycle(
         self,
         cli_runner: Callable,
         temp_workflow_file: Callable,
         valid_workflow_yaml: str,
+        test_config_path: str,
     ):
         """Test complete workflow lifecycle: validate -> run."""
         workflow_path = temp_workflow_file(valid_workflow_yaml)
@@ -562,19 +561,24 @@ class TestCLIIntegrationScenarios:
         validate_result = cli_runner("validate", str(workflow_path))
         assert validate_result.returncode == 0, f"Validation failed: {validate_result.stderr}"
 
-        # Step 2: Run
-        run_result = cli_runner("run", str(workflow_path))
+        # Step 2: Run a workflow from the registry (not the temp file)
+        # The 'run' command expects a workflow ID from the registry, not a file path
+        run_result = cli_runner(
+            "run",
+            "simple-linear",
+            "--input", "url=https://lifecycle-test.example.com",
+            config=test_config_path,
+        )
         assert run_result.returncode == 0, f"Run failed: {run_result.stderr}"
 
-    @pytest.mark.skip(reason="'ael tools' command deferred for post-MVP")
-    def test_tools_workflow(self, cli_runner: Callable):
+    def test_tools_workflow(self, cli_runner: Callable, test_config_path: str):
         """Test tools discovery workflow."""
         # Step 1: List tools
-        list_result = cli_runner("tools", "list")
+        list_result = cli_runner("tools", "list", config=test_config_path)
 
         # Step 2: If tools exist, try to show one
         if list_result.returncode == 0 and "python_exec" in list_result.stdout:
-            show_result = cli_runner("tools", "show", "python_exec")
+            show_result = cli_runner("tools", "show", "python_exec", config=test_config_path)
             # Should work
             assert show_result.returncode == 0 or "python" in show_result.stdout.lower()
 

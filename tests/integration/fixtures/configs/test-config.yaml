@@ -13,7 +13,7 @@ logging:
 tools:
   # No MCP servers for basic tests - use mocks
   servers: {}
-  
+
   system:
     python_exec:
       enabled: true
@@ -21,7 +21,9 @@ tools:
         profile: standard
 
 workflows:
-  directory: tests/integration/fixtures/workflows
+  # Use absolute path for Docker, relative path for local tests
+  # Docker mounts workflows to /app/workflows
+  directory: ${PLOSTON_WORKFLOWS_DIR:-/app/workflows}
   watch: false  # Disabled for tests
 
 execution:

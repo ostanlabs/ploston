@@ -1,0 +1,18 @@
+name: fetch-url
+version: "1.0.0"
+description: Fetch a URL and return the response
+
+inputs:
+  - url
+
+steps:
+  - id: fetch
+    tool: http_request
+    params:
+      url: "{{ inputs.url }}"
+      method: GET
+
+outputs:
+  response:
+    from: steps.fetch.output
+

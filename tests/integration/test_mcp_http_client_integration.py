@@ -68,7 +68,7 @@ def run_mcp_http_client(*args: str, timeout: int = 90, port: int = 8081) -> MCPH
         *args,
     ]
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    # Use installed packages - no need to set PYTHONPATH if packages are installed
 
     result = subprocess.run(
         cmd,

@@ -1,0 +1,37 @@
+name: file-operations
+version: "1.0.0"
+description: Demonstrate filesystem tools
+
+inputs:
+  - filename:
+      type: string
+      default: "test.txt"
+  - content:
+      type: string
+      default: "Hello from AEL!"
+
+steps:
+  - id: write
+    tool: fs_write
+    params:
+      path: "{{ inputs.filename }}"
+      content: "{{ inputs.content }}"
+
+  - id: read
+    tool: fs_read
+    params:
+      path: "{{ inputs.filename }}"
+
+  - id: list
+    tool: fs_list
+    params:
+      path: "."
+
+outputs:
+  written:
+    from: steps.write.output
+  content:
+    from: steps.read.output
+  files:
+    from: steps.list.output
+
