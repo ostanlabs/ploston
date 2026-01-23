@@ -62,7 +62,8 @@ def run_mcp_client(*args: str, timeout: int = 60) -> MCPClientResult:
     cmd = [
         sys.executable,
         str(MCP_TEST_CLIENT),
-        "-c", str(AEL_CONFIG),
+        "-c",
+        str(AEL_CONFIG),
         *args,
     ]
     env = os.environ.copy()
@@ -191,6 +192,7 @@ class TestToolsDiscovery:
         assert "Available Tools" in result.stdout
         # Extract count from output like "Available Tools (34)"
         import re
+
         match = re.search(r"Available Tools \((\d+)\)", result.stdout)
         assert match, "Could not find tool count in output"
         count = int(match.group(1))
@@ -213,7 +215,8 @@ class TestToolCalls:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--call", "http_request",
+            "--call",
+            "http_request",
             '{"url": "https://httpbin.org/get", "method": "GET"}',
             timeout=30,
         )
@@ -231,7 +234,8 @@ class TestToolCalls:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--call", "network_ping",
+            "--call",
+            "network_ping",
             '{"host": "localhost"}',
             timeout=30,
         )
@@ -247,13 +251,16 @@ class TestToolCalls:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--call", "nonexistent_tool_xyz",
-            '{}',
+            "--call",
+            "nonexistent_tool_xyz",
+            "{}",
             timeout=30,
         )
 
         # Should fail with error
-        assert result.returncode != 0 or "Error" in result.stdout or "error" in result.stdout.lower()
+        assert (
+            result.returncode != 0 or "Error" in result.stdout or "error" in result.stdout.lower()
+        )
 
 
 # =============================================================================
@@ -272,7 +279,8 @@ class TestWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--workflow", "fetch-url",
+            "--workflow",
+            "fetch-url",
             '{"url": "https://httpbin.org/get"}',
             timeout=60,
         )
@@ -289,7 +297,8 @@ class TestWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--workflow", "file-operations",
+            "--workflow",
+            "file-operations",
             '{"filename": "test-mcp-integration.txt", "content": "MCP test content"}',
             timeout=30,
         )
@@ -310,7 +319,8 @@ class TestWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--workflow", "python-exec-explicit",
+            "--workflow",
+            "python-exec-explicit",
             '{"numbers": [1, 2, 3, 4, 5]}',
             timeout=30,
         )
@@ -321,7 +331,7 @@ class TestWorkflowExecution:
 
     @pytest.mark.skipif(
         os.environ.get("SKIP_KAFKA_TESTS", "").lower() in ("1", "true", "yes"),
-        reason="Kafka tests skipped via SKIP_KAFKA_TESTS env var"
+        reason="Kafka tests skipped via SKIP_KAFKA_TESTS env var",
     )
     def test_mci_016_execute_fetch_and_publish_workflow(self):
         """
@@ -334,7 +344,8 @@ class TestWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--workflow", "fetch-and-publish",
+            "--workflow",
+            "fetch-and-publish",
             '{"url": "https://httpbin.org/get", "topic": "test-events"}',
             timeout=60,
         )
@@ -368,8 +379,9 @@ class TestErrorHandling:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--call", "http_request",
-            'not valid json',
+            "--call",
+            "http_request",
+            "not valid json",
             timeout=30,
         )
 
@@ -386,8 +398,9 @@ class TestErrorHandling:
 
         # fetch-url requires 'url' input
         result = run_mcp_client(
-            "--workflow", "fetch-url",
-            '{}',  # Missing required 'url'
+            "--workflow",
+            "fetch-url",
+            "{}",  # Missing required 'url'
             timeout=30,
         )
 
@@ -403,11 +416,11 @@ class TestErrorHandling:
         skip_if_no_client()
 
         result = run_mcp_client(
-            "--workflow", "nonexistent-workflow-xyz",
-            '{}',
+            "--workflow",
+            "nonexistent-workflow-xyz",
+            "{}",
             timeout=30,
         )
 
         # Should fail
         assert result.returncode != 0 or "error" in result.stdout.lower()
-

@@ -566,7 +566,8 @@ class TestCLIIntegrationScenarios:
         run_result = cli_runner(
             "run",
             "simple-linear",
-            "--input", "url=https://lifecycle-test.example.com",
+            "--input",
+            "url=https://lifecycle-test.example.com",
             config=test_config_path,
         )
         assert run_result.returncode == 0, f"Run failed: {run_result.stderr}"

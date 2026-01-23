@@ -254,9 +254,7 @@ class TestHTTPTransportModeAwareness:
             "name": "ael:configure",
             "description": "Switch to config mode",
         }
-        registry.call = AsyncMock(
-            return_value={"content": [{"type": "text", "text": "ok"}]}
-        )
+        registry.call = AsyncMock(return_value={"content": [{"type": "text", "text": "ok"}]})
         return registry
 
     @pytest.fixture

@@ -16,7 +16,9 @@ DEFAULT_DOCKER_URL = "http://localhost:8082"
 
 def get_docker_url() -> str:
     """Get the docker-compose AEL URL from environment or default."""
-    return os.environ.get("PLOSTON_DOCKER_URL", os.environ.get("AEL_DOCKER_URL", DEFAULT_DOCKER_URL))
+    return os.environ.get(
+        "PLOSTON_DOCKER_URL", os.environ.get("AEL_DOCKER_URL", DEFAULT_DOCKER_URL)
+    )
 
 
 class DockerMCPClient:
@@ -70,11 +72,14 @@ class DockerMCPClient:
 
     def initialize(self) -> dict[str, Any]:
         """Send initialize request."""
-        return self.send("initialize", {
-            "protocolVersion": "2024-11-05",
-            "clientInfo": {"name": "docker-test-client", "version": "1.0.0"},
-            "capabilities": {},
-        })
+        return self.send(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "clientInfo": {"name": "docker-test-client", "version": "1.0.0"},
+                "capabilities": {},
+            },
+        )
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List available tools."""
@@ -137,7 +142,8 @@ def running_mode_available(docker_client: DockerMCPClient, docker_available: boo
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
-        "markers", "requires_running_mode: mark test as requiring running mode (not configuration mode)"
+        "markers",
+        "requires_running_mode: mark test as requiring running mode (not configuration mode)",
     )
 
 

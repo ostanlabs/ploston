@@ -197,6 +197,7 @@ class TestModeTransitions:
         mode_manager = ModeManager(initial_mode=Mode.CONFIGURATION)
 
         callback_called = []
+
         # Callback receives only new_mode, not (old_mode, new_mode)
         def on_mode_change(new_mode):
             callback_called.append(new_mode)
@@ -226,9 +227,7 @@ class TestToolsListByMode:
             config_loader=config_loader,
         )
 
-    def test_configuration_mode_returns_config_tools_only(
-        self, mode_manager, config_tool_registry
-    ):
+    def test_configuration_mode_returns_config_tools_only(self, mode_manager, config_tool_registry):
         """Test that Configuration Mode returns only config tools."""
         # In configuration mode, only config tools should be available
         assert mode_manager.mode == Mode.CONFIGURATION

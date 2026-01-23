@@ -5,4 +5,3 @@ for the Ploston agent execution platform.
 """
 
 __version__ = "1.0.0"
-

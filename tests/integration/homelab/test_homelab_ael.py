@@ -52,7 +52,9 @@ pytestmark = [
 class TestHomelabHealth:
     """Tests for AEL health and availability on homelab."""
 
-    def test_hl_001_health_endpoint_responds(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_001_health_endpoint_responds(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-001: Verify AEL health endpoint responds."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -90,7 +92,9 @@ class TestHomelabRunningMode:
     In this mode, python_exec and workflows are available.
     """
 
-    def test_hl_004_list_tools_in_running_mode(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_004_list_tools_in_running_mode(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-004: Verify tools are available in running mode."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -101,7 +105,9 @@ class TestHomelabRunningMode:
         # In running mode, python_exec should be available
         assert "python_exec" in tool_names, "python_exec should be available in running mode"
 
-    def test_hl_005_python_exec_available(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_005_python_exec_available(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-005: Verify python_exec tool is available."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -111,7 +117,9 @@ class TestHomelabRunningMode:
 
         assert "python_exec" in tool_names
 
-    def test_hl_006_workflow_available(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_006_workflow_available(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-006: Verify at least one workflow is available."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -121,7 +129,9 @@ class TestHomelabRunningMode:
 
         assert len(workflow_tools) >= 1, "At least one workflow should be available"
 
-    def test_hl_007_tool_count_in_running_mode(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_007_tool_count_in_running_mode(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-007: Verify expected number of tools in running mode."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -144,33 +154,44 @@ class TestHomelabToolExecution:
     These tests require AEL to be in running mode with MCP servers connected.
     """
 
-    def test_hl_008_call_http_request(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
-        """HL-008: Verify http_request tool works via native-tools MCP server.
-        """
+    def test_hl_008_call_http_request(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
+        """HL-008: Verify http_request tool works via native-tools MCP server."""
         skip_if_homelab_unavailable(homelab_available)
 
-        result = homelab_client_running.call_tool("http_request", {
-            "url": "https://httpbin.org/get",
-            "method": "GET",
-        })
+        result = homelab_client_running.call_tool(
+            "http_request",
+            {
+                "url": "https://httpbin.org/get",
+                "method": "GET",
+            },
+        )
 
         assert "content" in result
         assert result.get("isError") is False
 
-    def test_hl_009_call_python_exec(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
+    def test_hl_009_call_python_exec(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
         """HL-009: Verify python_exec tool works."""
         skip_if_homelab_unavailable(homelab_available)
 
-        result = homelab_client_running.call_tool("python_exec", {
-            "code": "result = sum([1, 2, 3, 4, 5])",
-        })
+        result = homelab_client_running.call_tool(
+            "python_exec",
+            {
+                "code": "result = sum([1, 2, 3, 4, 5])",
+            },
+        )
 
         assert "content" in result
         # Result should contain 15
         content = str(result.get("content", []))
         assert "15" in content or result.get("isError") is False
 
-    def test_hl_010_call_nonexistent_tool_fails(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_010_call_nonexistent_tool_fails(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-010: Verify calling nonexistent tool returns error."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -191,30 +212,41 @@ class TestHomelabWorkflowExecution:
     These tests require AEL to be in running mode with MCP servers connected.
     """
 
-    def test_hl_013_execute_fetch_url_workflow(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
-        """HL-013: Verify fetch-url workflow executes using http_request from native-tools.
-        """
+    def test_hl_013_execute_fetch_url_workflow(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
+        """HL-013: Verify fetch-url workflow executes using http_request from native-tools."""
         skip_if_homelab_unavailable(homelab_available)
 
-        result = homelab_client_running.call_tool("workflow:fetch-url", {
-            "url": "https://httpbin.org/get",
-        })
+        result = homelab_client_running.call_tool(
+            "workflow:fetch-url",
+            {
+                "url": "https://httpbin.org/get",
+            },
+        )
 
         assert "content" in result
         assert result.get("isError") is False
 
-    def test_hl_014_execute_python_exec_workflow(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
+    def test_hl_014_execute_python_exec_workflow(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
         """HL-014: Verify python-exec-explicit workflow executes."""
         skip_if_homelab_unavailable(homelab_available)
 
-        result = homelab_client_running.call_tool("workflow:python-exec-explicit", {
-            "numbers": [1, 2, 3, 4, 5],
-        })
+        result = homelab_client_running.call_tool(
+            "workflow:python-exec-explicit",
+            {
+                "numbers": [1, 2, 3, 4, 5],
+            },
+        )
 
         assert "content" in result
         assert result.get("isError") is False
 
-    def test_hl_015_workflow_not_found(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
+    def test_hl_015_workflow_not_found(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
         """HL-015: Verify nonexistent workflow returns error."""
         skip_if_homelab_unavailable(homelab_available)
 
@@ -245,7 +277,9 @@ class TestHomelabPerformance:
         assert response.status_code == 200
         assert elapsed < 1.0, f"Health check took {elapsed:.2f}s, expected < 1s"
 
-    def test_hl_019_tool_list_response_time(self, homelab_available: bool, homelab_client: HomelabMCPClient):
+    def test_hl_019_tool_list_response_time(
+        self, homelab_available: bool, homelab_client: HomelabMCPClient
+    ):
         """HL-019: Verify tools/list responds within 5 seconds."""
         import time
 
@@ -261,16 +295,21 @@ class TestHomelabPerformance:
         assert elapsed < 5.0, f"Tools list took {elapsed:.2f}s, expected < 5s"
 
     @pytest.mark.requires_running_mode
-    def test_hl_020_simple_tool_execution_time(self, homelab_available: bool, homelab_client_running: HomelabMCPClient):
+    def test_hl_020_simple_tool_execution_time(
+        self, homelab_available: bool, homelab_client_running: HomelabMCPClient
+    ):
         """HL-020: Verify simple tool execution within 10 seconds."""
         import time
 
         skip_if_homelab_unavailable(homelab_available)
 
         start = time.time()
-        result = homelab_client_running.call_tool("python_exec", {
-            "code": "result = 2 + 2",
-        })
+        result = homelab_client_running.call_tool(
+            "python_exec",
+            {
+                "code": "result = 2 + 2",
+            },
+        )
         elapsed = time.time() - start
 
         assert result.get("isError") is False

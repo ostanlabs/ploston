@@ -127,9 +127,7 @@ class TestWorkflowEndpoints:
 class TestToolEndpoints:
     """Tests for tool endpoints."""
 
-    def test_list_tools_empty(
-        self, test_client: TestClient, mock_tool_registry: MagicMock
-    ) -> None:
+    def test_list_tools_empty(self, test_client: TestClient, mock_tool_registry: MagicMock) -> None:
         """Test listing tools when none exist."""
         mock_tool_registry.list_tools.return_value = []
 
@@ -172,4 +170,3 @@ class TestExecutionEndpoints:
         assert "error" in data
         assert data["error"]["code"] == "HTTP_404"
         assert "not found" in data["error"]["message"].lower()
-

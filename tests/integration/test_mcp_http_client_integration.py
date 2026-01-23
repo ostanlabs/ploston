@@ -62,8 +62,10 @@ def run_mcp_http_client(*args: str, timeout: int = 90, port: int = 8081) -> MCPH
     cmd = [
         sys.executable,
         str(MCP_HTTP_TEST_CLIENT),
-        "-c", str(AEL_CONFIG),
-        "--port", str(port),
+        "-c",
+        str(AEL_CONFIG),
+        "--port",
+        str(port),
         *args,
     ]
     env = os.environ.copy()
@@ -178,7 +180,6 @@ class TestHTTPToolsDiscovery:
         assert "workflow:file-operations" in result.stdout
         assert "workflow:python-exec-explicit" in result.stdout
 
-
     def test_mcih_006_tool_count_matches_expected(self):
         """
         MCIH-006: Verify expected number of tools are discovered via HTTP.
@@ -193,6 +194,7 @@ class TestHTTPToolsDiscovery:
         assert "Available Tools" in result.stdout
         # Extract count from output like "Available Tools (34)"
         import re
+
         match = re.search(r"Available Tools \((\d+)\)", result.stdout)
         assert match, "Could not find tool count in output"
         count = int(match.group(1))
@@ -215,7 +217,8 @@ class TestHTTPToolCalls:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--call", "http_request",
+            "--call",
+            "http_request",
             '{"url": "https://httpbin.org/get", "method": "GET"}',
             timeout=60,
             port=8097,
@@ -234,7 +237,8 @@ class TestHTTPToolCalls:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--call", "network_ping",
+            "--call",
+            "network_ping",
             '{"host": "localhost"}',
             timeout=60,
             port=8098,
@@ -251,14 +255,17 @@ class TestHTTPToolCalls:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--call", "nonexistent_tool_xyz",
-            '{}',
+            "--call",
+            "nonexistent_tool_xyz",
+            "{}",
             timeout=60,
             port=8099,
         )
 
         # Should fail with error
-        assert result.returncode != 0 or "Error" in result.stdout or "error" in result.stdout.lower()
+        assert (
+            result.returncode != 0 or "Error" in result.stdout or "error" in result.stdout.lower()
+        )
 
 
 # =============================================================================
@@ -277,7 +284,8 @@ class TestHTTPWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--workflow", "fetch-url",
+            "--workflow",
+            "fetch-url",
             '{"url": "https://httpbin.org/get"}',
             timeout=90,
             port=8100,
@@ -295,7 +303,8 @@ class TestHTTPWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--workflow", "file-operations",
+            "--workflow",
+            "file-operations",
             '{"filename": "test-mcp-http-integration.txt", "content": "MCP HTTP test content"}',
             timeout=60,
             port=8101,
@@ -317,7 +326,8 @@ class TestHTTPWorkflowExecution:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--workflow", "python-exec-explicit",
+            "--workflow",
+            "python-exec-explicit",
             '{"numbers": [1, 2, 3, 4, 5]}',
             timeout=60,
             port=8102,
@@ -344,8 +354,9 @@ class TestHTTPErrorHandling:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--call", "http_request",
-            'not valid json',
+            "--call",
+            "http_request",
+            "not valid json",
             timeout=60,
             port=8103,
         )
@@ -363,8 +374,9 @@ class TestHTTPErrorHandling:
 
         # fetch-url requires 'url' input
         result = run_mcp_http_client(
-            "--workflow", "fetch-url",
-            '{}',  # Missing required 'url'
+            "--workflow",
+            "fetch-url",
+            "{}",  # Missing required 'url'
             timeout=60,
             port=8104,
         )
@@ -381,8 +393,9 @@ class TestHTTPErrorHandling:
         skip_if_no_client()
 
         result = run_mcp_http_client(
-            "--workflow", "nonexistent-workflow-xyz",
-            '{}',
+            "--workflow",
+            "nonexistent-workflow-xyz",
+            "{}",
             timeout=60,
             port=8105,
         )

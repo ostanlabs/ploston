@@ -349,9 +349,7 @@ class TestPluginRegistry:
     def test_load_builtin_plugin(self):
         """Test loading builtin plugin."""
         registry = PluginRegistry()
-        definitions = [
-            PluginDefinition(name="logging", type="builtin", enabled=True)
-        ]
+        definitions = [PluginDefinition(name="logging", type="builtin", enabled=True)]
         result = registry.load_plugins(definitions)
 
         assert result.success_count == 1
@@ -362,9 +360,7 @@ class TestPluginRegistry:
     def test_load_disabled_plugin(self):
         """Test disabled plugins are skipped."""
         registry = PluginRegistry()
-        definitions = [
-            PluginDefinition(name="logging", type="builtin", enabled=False)
-        ]
+        definitions = [PluginDefinition(name="logging", type="builtin", enabled=False)]
         result = registry.load_plugins(definitions)
 
         assert result.success_count == 0
@@ -373,9 +369,7 @@ class TestPluginRegistry:
     def test_load_unknown_builtin(self):
         """Test loading unknown builtin fails gracefully."""
         registry = PluginRegistry()
-        definitions = [
-            PluginDefinition(name="nonexistent", type="builtin", enabled=True)
-        ]
+        definitions = [PluginDefinition(name="nonexistent", type="builtin", enabled=True)]
         result = registry.load_plugins(definitions)
 
         assert result.success_count == 0
@@ -399,13 +393,13 @@ class TestPluginRegistry:
     def test_load_from_file(self):
         """Test loading plugin from file."""
         # Create a temporary plugin file
-        plugin_code = '''
+        plugin_code = """
 from ploston_core.plugins import AELPlugin
 
 class FilePlugin(AELPlugin):
     name = "file-plugin"
     priority = 25
-'''
+"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(plugin_code)
             plugin_path = f.name
@@ -445,9 +439,7 @@ class FilePlugin(AELPlugin):
     def test_unknown_plugin_type(self):
         """Test unknown plugin type fails."""
         registry = PluginRegistry()
-        definitions = [
-            PluginDefinition(name="test", type="unknown", enabled=True)
-        ]
+        definitions = [PluginDefinition(name="test", type="unknown", enabled=True)]
         result = registry.load_plugins(definitions)
 
         assert result.failure_count == 1

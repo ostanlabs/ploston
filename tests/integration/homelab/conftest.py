@@ -71,11 +71,14 @@ class HomelabMCPClient:
 
     def initialize(self) -> dict[str, Any]:
         """Send initialize request."""
-        return self.send("initialize", {
-            "protocolVersion": "2024-11-05",
-            "clientInfo": {"name": "homelab-test-client", "version": "1.0.0"},
-            "capabilities": {},
-        })
+        return self.send(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "clientInfo": {"name": "homelab-test-client", "version": "1.0.0"},
+                "capabilities": {},
+            },
+        )
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List available tools."""
@@ -154,4 +157,3 @@ def homelab_client_running(homelab_client: HomelabMCPClient) -> HomelabMCPClient
         homelab_client.config_done()
 
     return homelab_client
-

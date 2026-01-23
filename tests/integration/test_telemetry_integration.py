@@ -30,6 +30,7 @@ class TestMetricsEndpoint:
 
     def test_metrics_endpoint_without_telemetry(self):
         """Test /metrics endpoint when telemetry is not initialized."""
+
         async def mock_handler(msg):
             return {"jsonrpc": "2.0", "id": msg.get("id"), "result": {}}
 
@@ -262,12 +263,14 @@ class TestStructuredLoggingIntegration:
         """Reset telemetry and loggers before each test."""
         reset_telemetry()
         from ploston_core.telemetry.logging import reset_loggers
+
         reset_loggers()
 
     def teardown_method(self):
         """Reset telemetry and loggers after each test."""
         reset_telemetry()
         from ploston_core.telemetry.logging import reset_loggers
+
         reset_loggers()
 
     def test_logger_includes_trace_context_in_span(self):
