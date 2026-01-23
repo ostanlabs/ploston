@@ -21,9 +21,8 @@ tools:
         profile: standard
 
 workflows:
-  # Use absolute path for Docker, relative path for local tests
-  # Docker mounts workflows to /app/workflows
-  directory: ${PLOSTON_WORKFLOWS_DIR:-/app/workflows}
+  # Use relative path from project root for local tests
+  directory: tests/integration/fixtures/workflows
   watch: false  # Disabled for tests
 
 execution:

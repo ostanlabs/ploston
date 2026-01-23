@@ -53,3 +53,8 @@ ignore = ["E501"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[dependency-groups]
+dev = [
+    "ploston-cli>=1.0.0",
+]
+
