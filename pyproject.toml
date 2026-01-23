@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "ploston-core>=1.0.0,<2.0.0",
+    "ploston-core>=1.1.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
