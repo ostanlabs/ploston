@@ -1,0 +1,152 @@
+# =============================================================================
+# Ploston Development Docker Compose
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.dev.yaml up -d    # Start dev environment
+#   docker compose -f docker-compose.dev.yaml logs -f  # View logs
+#   docker compose -f docker-compose.dev.yaml down     # Stop services
+#
+# Features:
+#   - Source code mounted for hot-reload
+#   - Debug logging enabled
+#   - Test files accessible
+#   - Interactive shell support
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ploston Development - with hot-reload
+  # ---------------------------------------------------------------------------
+  ploston-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime  # Use runtime stage, mount source for dev
+    image: ploston:dev
+    container_name: ploston-dev
+    
+    depends_on:
+      native-tools-dev:
+        condition: service_healthy
+    
+    environment:
+      # Server configuration
+      - AEL_HOST=0.0.0.0
+      - AEL_PORT=8080
+      - AEL_TRANSPORT=http
+      
+      # Development settings
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - AEL_DEBUG=true
+      
+      # Telemetry (enabled for testing)
+      - AEL_TELEMETRY_ENABLED=true
+      - AEL_METRICS_ENABLED=true
+      - AEL_TRACES_ENABLED=true
+      
+      # Native tools MCP server
+      - NATIVE_TOOLS_URL=http://native-tools-dev:8081
+      
+      # Config file location
+      - AEL_CONFIG=/app/config/ploston-config.yaml
+      
+    ports:
+      # MCP HTTP server
+      - "8080:8080"
+      # Prometheus metrics
+      - "9090:9090"
+      
+    volumes:
+      # Mount source code for hot-reload (changes reflect immediately)
+      - ./src:/app/src:ro
+      
+      # Mount test files for running tests in container
+      - ./tests:/app/tests:ro
+      
+      # Mount example workflows and configs
+      - ./examples:/app/examples:ro
+      - ./internal:/app/internal:ro
+      
+      # Mount configuration
+      - ./config:/app/config:ro
+      
+      # Mount workflows (read-write for testing)
+      - ./workflows:/app/workflows
+      
+    # Keep container running for shell access
+    stdin_open: true
+    tty: true
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # Native Tools Development
+  # ---------------------------------------------------------------------------
+  native-tools-dev:
+    build:
+      context: .
+      dockerfile: docker/native-tools/Dockerfile
+      target: runtime
+    image: native-tools:dev
+    container_name: native-tools-dev
+    
+    environment:
+      # Server configuration
+      - NATIVE_TOOLS_HOST=0.0.0.0
+      - NATIVE_TOOLS_PORT=8081
+      
+      # Development settings
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      
+      # Optional external services
+      - FIRECRAWL_BASE_URL=${FIRECRAWL_BASE_URL:-}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      
+    ports:
+      # Expose for direct testing
+      - "8081:8081"
+      
+    volumes:
+      # Mount source code for hot-reload
+      - ./agent/src:/app/src:ro
+      
+      # Data directory
+      - ./data:/data
+      
+    stdin_open: true
+    tty: true
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  default:
+    name: ploston-dev-network

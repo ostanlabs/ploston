@@ -1,0 +1,11 @@
+# =============================================================================
+# Ploston Namespace
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ploston
+  labels:
+    app.kubernetes.io/name: ploston
+    app.kubernetes.io/part-of: ploston
+

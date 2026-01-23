@@ -1,0 +1,88 @@
+# =============================================================================
+# Ploston ConfigMap - Environment Variables
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ploston-config
+  namespace: ploston
+data:
+  # Ploston Configuration
+  AEL_HOST: "0.0.0.0"
+  AEL_PORT: "8082"
+  AEL_TRANSPORT: "http"
+  AEL_CONFIG_PATH: "/app/config/ploston-config.yaml"
+
+  # REST API (dual-mode)
+  AEL_WITH_API: "true"
+  AEL_API_PREFIX: "/api/v1"
+  AEL_API_DOCS: "true"
+
+  # Telemetry
+  AEL_TELEMETRY_ENABLED: "true"
+  AEL_METRICS_ENABLED: "true"
+  AEL_TRACES_ENABLED: "true"
+  AEL_LOGS_ENABLED: "true"
+
+  # OTLP export - pointing to observability namespace
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc:4317"
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
+  OTEL_SERVICE_NAME: "ploston"
+
+  # Native tools MCP server (for config file)
+  NATIVE_TOOLS_URL: "http://native-tools:8081"
+
+  # Kafka configuration
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.ploston.svc.cluster.local:9093"
+---
+# =============================================================================
+# Ploston ConfigMap - Config File
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ploston-config-file
+  namespace: ploston
+data:
+  ploston-config.yaml: |
+    # Ploston Homelab K3s Configuration
+    # Connects to native-tools MCP server via HTTP transport
+
+    tools:
+      mcp_servers:
+        native_tools:
+          url: "http://native-tools:8081/mcp"
+          transport: http
+          env:
+            FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:-http://firecrawl:3002}"
+            FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
+            KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka-0.kafka.ploston.svc.cluster.local:9093}"
+            WORKSPACE_DIR: "/app/workspace"
+
+    workflows:
+      directory: "/app/workflows"
+      watch: false
+
+    python_exec:
+      timeout: 30
+      max_tool_calls: 10
+      default_imports:
+        - json
+        - re
+        - datetime
+        - math
+        - random
+        - typing
+        - collections
+        - itertools
+        - functools
+        - statistics
+        - uuid
+        - copy
+        - decimal
+        - operator
+
+    logging:
+      level: INFO
+      format: json
+

@@ -1,0 +1,137 @@
+# =============================================================================
+# Ploston Production Docker Compose
+# =============================================================================
+# Usage:
+#   docker compose up -d                # Start all services
+#   docker compose up -d ploston        # Start Ploston only
+#   docker compose logs -f ploston      # View Ploston logs
+#   docker compose down                 # Stop all services
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ploston - Agent Execution Layer
+  # ---------------------------------------------------------------------------
+  # Main MCP server with workflow engine and tool orchestration
+  ploston:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ploston:latest
+    container_name: ploston
+
+    depends_on:
+      native-tools:
+        condition: service_healthy
+
+    environment:
+      # Server configuration
+      - AEL_HOST=0.0.0.0
+      - AEL_PORT=8080
+      - AEL_TRANSPORT=http
+
+      # Telemetry configuration
+      - AEL_TELEMETRY_ENABLED=true
+      - AEL_METRICS_ENABLED=true
+      - AEL_TRACES_ENABLED=true
+
+      # Native tools MCP server (internal network)
+      - NATIVE_TOOLS_URL=http://native-tools:8081
+
+      # Logging
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+
+      # Config file location (can override with volume mount)
+      - AEL_CONFIG=/app/config/ploston-config.yaml
+
+    ports:
+      # MCP HTTP server
+      - "8080:8080"
+      # Prometheus metrics
+      - "9090:9090"
+
+    volumes:
+      # Mount configuration (optional - use default if not provided)
+      - ./config:/app/config:ro
+      # Mount workflows
+      - ./workflows:/app/workflows:ro
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Native Tools - MCP server with filesystem, network, data tools
+  # ---------------------------------------------------------------------------
+  native-tools:
+    build:
+      context: .
+      dockerfile: docker/native-tools/Dockerfile
+    image: native-tools:latest
+    container_name: native-tools
+
+    environment:
+      # Server configuration
+      - NATIVE_TOOLS_HOST=0.0.0.0
+      - NATIVE_TOOLS_PORT=8081
+
+      # Optional external services (configure as needed)
+      - FIRECRAWL_BASE_URL=${FIRECRAWL_BASE_URL:-}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+
+      # Logging
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+
+    volumes:
+      # Data directory for filesystem operations
+      - native-tools-data:/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  native-tools-data:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  default:
+    name: ploston-network

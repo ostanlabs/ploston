@@ -1,0 +1,22 @@
+# Hello World Workflow
+#
+# A simple workflow that demonstrates basic AEL features.
+
+id: hello-world
+name: Hello World
+description: A simple example workflow
+
+inputs:
+  name:
+    type: string
+    description: Name to greet
+    default: "World"
+
+steps:
+  - id: greet
+    name: Generate Greeting
+    code: |
+      name = "{{ inputs.name }}"
+      result = f"Hello, {name}!"
+
+output: "{{ steps.greet.output }}"

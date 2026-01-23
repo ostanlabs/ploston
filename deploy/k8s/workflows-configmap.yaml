@@ -1,0 +1,103 @@
+# =============================================================================
+# Ploston Workflows ConfigMap
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ploston-workflows
+  namespace: ploston
+data:
+  fetch-url.yaml: |
+    name: fetch-url
+    version: "1.0.0"
+    description: Fetch a URL and return the response
+
+    inputs:
+      - url
+
+    steps:
+      - id: fetch
+        tool: http_request
+        params:
+          url: "{{ inputs.url }}"
+          method: GET
+
+    outputs:
+      response:
+        from: steps.fetch.output
+
+  python-exec-explicit.yaml: |
+    name: python-exec-explicit
+    version: "1.0.0"
+    description: Demonstrate both python_exec modes
+
+    inputs:
+      - numbers:
+          type: array
+          default: [1, 2, 3, 4, 5]
+
+    steps:
+      # Implicit mode: code: block uses system defaults
+      - id: implicit_sum
+        code: |
+          numbers = context.inputs["numbers"]
+          result = sum(numbers)
+
+      # Explicit mode: tool: python_exec with custom config
+      - id: explicit_stats
+        tool: python_exec
+        params:
+          code: |
+            import statistics
+            result = {
+              "mean": statistics.mean(numbers),
+              "stdev": statistics.stdev(numbers) if len(numbers) > 1 else 0
+            }
+          context:
+            numbers: "{{ inputs.numbers }}"
+          timeout: 60
+
+    outputs:
+      sum:
+        from: steps.implicit_sum.output
+      stats:
+        from: steps.explicit_stats.output
+
+  file-operations.yaml: |
+    name: file-operations
+    version: "1.0.0"
+    description: Demonstrate filesystem tools
+
+    inputs:
+      - filename:
+          type: string
+          default: "test.txt"
+      - content:
+          type: string
+          default: "Hello from Ploston!"
+
+    steps:
+      - id: write
+        tool: fs_write
+        params:
+          path: "{{ inputs.filename }}"
+          content: "{{ inputs.content }}"
+
+      - id: read
+        tool: fs_read
+        params:
+          path: "{{ inputs.filename }}"
+
+      - id: list
+        tool: fs_list
+        params:
+          path: "."
+
+    outputs:
+      written:
+        from: steps.write.output
+      content:
+        from: steps.read.output
+      files:
+        from: steps.list.output
+

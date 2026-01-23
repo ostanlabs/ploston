@@ -1,0 +1,79 @@
+# =============================================================================
+# Ploston - Workflow Execution Engine Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ploston
+  namespace: ploston
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ploston
+  template:
+    metadata:
+      labels:
+        app: ploston
+    spec:
+      containers:
+        - name: ploston
+          image: registry.ostanlabs.homelab/ploston:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          env:
+            - name: AEL_CONFIG_PATH
+              value: "/app/config/ploston-config.yaml"
+          envFrom:
+            - configMapRef:
+                name: ploston-config
+            - secretRef:
+                name: ploston-secrets
+                optional: true
+          volumeMounts:
+            - name: config-file
+              mountPath: /app/config
+              readOnly: true
+            - name: workflows
+              mountPath: /app/workflows
+              readOnly: true
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config-file
+          configMap:
+            name: ploston-config-file
+        - name: workflows
+          configMap:
+            name: ploston-workflows
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ploston
+  namespace: ploston
+spec:
+  selector:
+    app: ploston
+  ports:
+    - port: 8082
+      targetPort: 8082
+

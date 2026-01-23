@@ -1,0 +1,55 @@
+# AEL Configuration Example
+# 
+# This file configures MCP servers, workflow locations, and logging.
+
+mcp:
+  servers:
+    # Example: Filesystem MCP server
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+      env: {}
+      
+    # Example: Custom MCP server
+    # my-server:
+    #   command: "python"
+    #   args: ["-m", "my_mcp_server"]
+    #   env:
+    #     API_KEY: "${MY_API_KEY}"
+
+workflows:
+  # Directory containing workflow YAML files
+  directory: "./workflows"
+  
+  # Auto-reload on file changes (development only)
+  hot_reload: true
+
+tools:
+  # Built-in tools to enable
+  builtins:
+    - python_exec
+    
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: INFO
+  
+  # Output format: colored, json
+  format: colored
+  
+  # Component-specific settings
+  components:
+    workflow: true
+    step: true
+    tool: true
+    sandbox: true
+
+execution:
+  # Default timeout for workflow execution (seconds)
+  timeout: 300
+  
+  # Default retry configuration
+  retry:
+    max_attempts: 3
+    backoff: exponential
+    initial_delay: 1.0
+    max_delay: 30.0

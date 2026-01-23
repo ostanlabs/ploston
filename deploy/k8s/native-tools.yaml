@@ -1,0 +1,53 @@
+# =============================================================================
+# Native Tools MCP Server Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: native-tools
+  namespace: ploston
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: native-tools
+  template:
+    metadata:
+      labels:
+        app: native-tools
+    spec:
+      containers:
+        - name: native-tools
+          image: 192.168.68.203:5000/native-tools:latest
+          ports:
+            - containerPort: 8081
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: native-tools
+  namespace: ploston
+spec:
+  selector:
+    app: native-tools
+  ports:
+    - port: 8081
+      targetPort: 8081
+

@@ -1,0 +1,50 @@
+# =============================================================================
+# Prometheus Configuration for AEL Homelab
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  
+  external_labels:
+    environment: homelab
+    service: ael
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers: []
+
+# Rule files (optional)
+rule_files: []
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          component: prometheus
+
+  # AEL metrics endpoint
+  - job_name: 'ael'
+    static_configs:
+      - targets: ['ael:8082']
+        labels:
+          component: ael
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # OTEL Collector metrics
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8889']
+        labels:
+          component: otel-collector
+
+  # Kafka metrics (if JMX exporter is configured)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka:9101']
+  #       labels:
+  #         component: kafka

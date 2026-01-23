@@ -1,0 +1,431 @@
+# =============================================================================
+# Ploston Homelab Deployment - docker-compose.homelab.yaml
+# =============================================================================
+# Phase 2.3: Homelab Deployment (M-001)
+#
+# Usage:
+#   docker compose -f docker-compose.homelab.yaml up -d
+#   docker compose -f docker-compose.homelab.yaml logs -f
+#   docker compose -f docker-compose.homelab.yaml down
+#
+# Prerequisites:
+#   - Copy .env.example to .env and configure secrets
+#   - Ensure ports 8082, 3002, 29092, 9090, 3000, 3100, 3200 are available
+#
+# Architecture:
+#   Ploston (8082) -> native-tools (stdio) -> Kafka (29092), Firecrawl (3002)
+#   Observability: Prometheus (9090), Grafana (3000), Loki (3100), Tempo (3200)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ploston - Agent Execution Layer
+  # ---------------------------------------------------------------------------
+  ploston:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ploston:homelab
+    container_name: ploston-homelab
+    restart: unless-stopped
+    
+    depends_on:
+      native-tools:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    
+    environment:
+      # Server configuration
+      - AEL_HOST=0.0.0.0
+      - AEL_PORT=8082
+      - AEL_TRANSPORT=http
+      
+      # Telemetry
+      - AEL_TELEMETRY_ENABLED=true
+      - AEL_METRICS_ENABLED=true
+      - AEL_TRACES_ENABLED=true
+      - AEL_LOGS_ENABLED=true
+      
+      # OTLP export to collector
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=ploston
+
+      # Native tools MCP server
+      - NATIVE_TOOLS_URL=http://native-tools:8081
+
+      # Kafka configuration
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+
+      # Firecrawl configuration
+      - FIRECRAWL_BASE_URL=http://firecrawl:3002
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+
+      # Config file
+      - AEL_CONFIG=/app/config/ploston-config.yaml
+
+    ports:
+      - "8082:8082"
+
+    volumes:
+      - ./config:/app/config:ro
+      - ./workflows:/app/workflows:ro
+      - ploston-data:/app/data
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+  # ---------------------------------------------------------------------------
+  # Native Tools MCP Server
+  # ---------------------------------------------------------------------------
+  native-tools:
+    build:
+      context: .
+      dockerfile: docker/native-tools/Dockerfile
+    image: native-tools:homelab
+    container_name: native-tools-homelab
+    restart: unless-stopped
+    
+    environment:
+      - NATIVE_TOOLS_HOST=0.0.0.0
+      - NATIVE_TOOLS_PORT=8081
+      - FIRECRAWL_BASE_URL=http://firecrawl:3002
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      
+    volumes:
+      - native-tools-data:/data
+      
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.connect(('localhost', 8081)); s.close()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    networks:
+      - ploston-homelab
+
+  # ---------------------------------------------------------------------------
+  # Kafka + Zookeeper
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper-homelab
+    restart: unless-stopped
+    
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+      
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-homelab
+    restart: unless-stopped
+    
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+      
+    ports:
+      - "29092:29092"
+      
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    networks:
+      - ploston-homelab
+
+  # ---------------------------------------------------------------------------
+  # Firecrawl
+  # ---------------------------------------------------------------------------
+  firecrawl:
+    image: mendableai/firecrawl:latest
+    container_name: firecrawl-homelab
+    restart: unless-stopped
+    
+    environment:
+      - PORT=3002
+      - HOST=0.0.0.0
+      
+    ports:
+      - "3002:3002"
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    
+    networks:
+      - ploston-homelab
+
+  # ---------------------------------------------------------------------------
+  # Observability Stack
+  # ---------------------------------------------------------------------------
+  
+  # Prometheus - Metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus-homelab
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      
+    ports:
+      - "9090:9090"
+      
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    
+    networks:
+      - ploston-homelab
+
+  # Grafana - Dashboards
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana-homelab
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      
+    ports:
+      - "3000:3000"
+      
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+  # Loki - Logs
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki-homelab
+    restart: unless-stopped
+    
+    command: -config.file=/etc/loki/loki-config.yaml
+    
+    ports:
+      - "3100:3100"
+      
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+  # Tempo - Traces
+  tempo:
+    image: grafana/tempo:2.3.1
+    container_name: tempo-homelab
+    restart: unless-stopped
+    
+    command: -config.file=/etc/tempo/tempo-config.yaml
+    
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4317:4317"   # OTLP gRPC (if not using collector)
+      
+    volumes:
+      - ./observability/tempo/tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
+      - tempo-data:/var/tempo
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3200/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+  # OTEL Collector - Unified telemetry pipeline
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: otel-collector-homelab
+    restart: unless-stopped
+    
+    command: --config=/etc/otelcol/config.yaml
+    
+    ports:
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics export
+      
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    
+    networks:
+      - ploston-homelab
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  ploston-data:
+  native-tools-data:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  ploston-homelab:
+    name: ploston-homelab-network
+    driver: bridge
