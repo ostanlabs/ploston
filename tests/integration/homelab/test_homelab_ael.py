@@ -38,7 +38,6 @@ import pytest
 
 from .conftest import HomelabMCPClient, skip_if_homelab_unavailable
 
-
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.homelab,
@@ -234,6 +233,7 @@ class TestHomelabPerformance:
     def test_hl_018_health_response_time(self, homelab_available: bool, homelab_url: str):
         """HL-018: Verify health endpoint responds within 1 second."""
         import time
+
         import requests
 
         skip_if_homelab_unavailable(homelab_available)

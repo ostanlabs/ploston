@@ -6,7 +6,6 @@ for the open-source community tier.
 
 from ploston_core.extensions import FeatureFlags
 
-
 COMMUNITY_FEATURE_FLAGS = FeatureFlags(
     # Core features (enabled)
     workflows=True,

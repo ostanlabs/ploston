@@ -11,7 +11,7 @@ import time
 import pytest
 import requests
 
-from .conftest import DockerMCPClient, get_docker_url
+from .conftest import DockerMCPClient
 
 
 class TestDockerHealth:

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-
 from ploston_core.api import RESTConfig, create_rest_app
 
 

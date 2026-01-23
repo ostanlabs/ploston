@@ -3,17 +3,14 @@
 Tests the HTTP transport with actual HTTP requests and MCP protocol handling.
 """
 
-import asyncio
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from starlette.testclient import TestClient
-
 from ploston_core.config import MCPHTTPConfig, Mode, ModeManager
 from ploston_core.mcp_frontend import MCPFrontend, MCPServerConfig
 from ploston_core.mcp_frontend.http_transport import HTTPTransport
 from ploston_core.types import MCPTransport
+from starlette.testclient import TestClient
 
 
 class TestHTTPTransportIntegration:

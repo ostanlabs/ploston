@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 import requests
 
-
 # Default homelab Ploston endpoint
 DEFAULT_HOMELAB_URL = "http://ploston.ostanlabs.homelab"
 

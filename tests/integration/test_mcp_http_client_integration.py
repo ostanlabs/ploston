@@ -13,7 +13,6 @@ Prerequisites:
 - AEL installed in virtualenv
 """
 
-import json
 import os
 import subprocess
 import sys

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
 from ploston_core.errors import create_error
 from ploston_core.types import BackoffType, OnError, RetryConfig
 

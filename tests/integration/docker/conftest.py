@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 import requests
 
-
 # Default docker-compose endpoint
 DEFAULT_DOCKER_URL = "http://localhost:8082"
 

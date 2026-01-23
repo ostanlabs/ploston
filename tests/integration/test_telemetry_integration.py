@@ -6,19 +6,15 @@ Tests telemetry integration with:
 - Tool invocation metrics
 """
 
-import asyncio
 import pytest
-from httpx import AsyncClient
-from starlette.testclient import TestClient
-
 from ploston_core.mcp_frontend.http_transport import HTTPTransport
 from ploston_core.telemetry import (
-    MetricLabels,
     TelemetryConfig,
     get_telemetry,
     reset_telemetry,
     setup_telemetry,
 )
+from starlette.testclient import TestClient
 
 
 class TestMetricsEndpoint:
@@ -131,7 +127,11 @@ class TestTelemetryIntegration:
     @pytest.mark.asyncio
     async def test_metrics_recorded_during_instrumentation(self):
         """Test that metrics are recorded during instrumentation."""
-        from ploston_core.telemetry import instrument_workflow, instrument_step, instrument_tool_call
+        from ploston_core.telemetry import (
+            instrument_step,
+            instrument_tool_call,
+            instrument_workflow,
+        )
 
         setup_telemetry()
         metrics = get_telemetry()["metrics"]
@@ -199,8 +199,8 @@ class TestTraceContextPropagation:
 
         tracer = trace.get_tracer("test")
 
-        with tracer.start_as_current_span("parent") as parent_span:
-            async with instrument_workflow("test-workflow") as result:
+        with tracer.start_as_current_span("parent"):
+            async with instrument_workflow("test-workflow"):
                 # Verify parent span context is preserved
                 current_span = trace.get_current_span()
                 assert current_span.is_recording()
@@ -212,8 +212,11 @@ class TestTraceContextPropagation:
     @pytest.mark.asyncio
     async def test_instrumentation_creates_spans(self):
         """Test that instrumentation creates spans (not as current)."""
-        from opentelemetry import trace
-        from ploston_core.telemetry import instrument_workflow, instrument_step, instrument_tool_call
+        from ploston_core.telemetry import (
+            instrument_step,
+            instrument_tool_call,
+            instrument_workflow,
+        )
 
         config = TelemetryConfig(traces_enabled=True)
         setup_telemetry(config)
@@ -272,6 +275,7 @@ class TestStructuredLoggingIntegration:
         import json
         import logging
         from io import StringIO
+
         from opentelemetry import trace
         from ploston_core.telemetry.logging import StructuredLogFormatter, get_logger
 
@@ -305,6 +309,7 @@ class TestStructuredLoggingIntegration:
         import json
         import logging
         from io import StringIO
+
         from opentelemetry import trace
         from ploston_core.telemetry import instrument_workflow
         from ploston_core.telemetry.logging import StructuredLogFormatter, get_logger

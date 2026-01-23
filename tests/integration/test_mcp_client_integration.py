@@ -13,7 +13,6 @@ Prerequisites:
 - AEL installed in virtualenv
 """
 
-import json
 import os
 import subprocess
 import sys
@@ -123,7 +122,7 @@ class TestMCPConfiguration:
         skip_if_no_client()
 
         result = run_mcp_client("--list-tools")
-        
+
         assert result.returncode == 0
         # Should have native tools
         assert "http_request" in result.stdout
@@ -147,9 +146,9 @@ class TestToolsDiscovery:
         skip_if_no_client()
 
         result = run_mcp_client("--list-tools")
-        
+
         assert result.returncode == 0
-        
+
         # Core native tools should be present
         expected_tools = [
             "http_request",
@@ -170,9 +169,9 @@ class TestToolsDiscovery:
         skip_if_no_client()
 
         result = run_mcp_client("--list-tools")
-        
+
         assert result.returncode == 0
-        
+
         # Workflows should be prefixed
         assert "workflow:fetch-url" in result.stdout
         assert "workflow:file-operations" in result.stdout

@@ -6,8 +6,8 @@ def test_basic() -> None:
     assert True
 
 
-def test_import_ael() -> None:
-    """Test that we can import the ael package."""
-    import ploston_core
+def test_import_ploston() -> None:
+    """Test that we can import the ploston package."""
+    import ploston
 
-    assert ael.__version__ == "0.1.0"
+    assert ploston.__version__ == "1.0.0"

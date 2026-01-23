@@ -3,17 +3,12 @@
 Tests the full configuration flow from startup to mode transitions.
 """
 
-import asyncio
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from ploston_core.config import ConfigLoader, Mode, ModeManager, StagedConfig
 from ploston_core.config.tools import ConfigToolRegistry
-from ploston_core.mcp_frontend import MCPFrontend, MCPServerConfig
 
 
 class TestStartupModeDetection:
@@ -94,7 +89,7 @@ telemetry:
             f.flush()
 
             config_loader = ConfigLoader()
-            config = config_loader.load(f.name)
+            _ = config_loader.load(f.name)
 
             # Mode should be RUNNING when config is valid
             mode_manager = ModeManager(initial_mode=Mode.RUNNING)
@@ -131,7 +126,7 @@ class TestConfigurationFlow:
         """Test that config_set stages changes without applying."""
         # Stage a change
         staged_config.set("logging.level", "DEBUG")
-        
+
         # Check that change is staged
         assert staged_config.has_changes()
         changes = staged_config.changes
@@ -142,7 +137,7 @@ class TestConfigurationFlow:
         """Test that config_validate checks staged config."""
         # Stage valid changes
         staged_config.set("logging.level", "DEBUG")
-        
+
         # Validate
         result = staged_config.validate()
         assert result.valid
@@ -151,9 +146,9 @@ class TestConfigurationFlow:
         """Test that config_validate catches invalid config."""
         # Stage invalid changes
         staged_config.set("logging.level", "INVALID_LEVEL")
-        
+
         # Validate
-        result = staged_config.validate()
+        _ = staged_config.validate()
         # May or may not be valid depending on validation rules
         # The important thing is that validation runs
 
