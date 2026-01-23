@@ -86,6 +86,7 @@ def config_file():
     # Cleanup
     Path(f.name).unlink(missing_ok=True)
     import shutil
+
     shutil.rmtree(workflows_dir, ignore_errors=True)
 
 
@@ -112,11 +113,11 @@ def server_process(server_port: int, config_file: Path):
         stderr=subprocess.PIPE,
         text=True,
     )
-    
+
     # Wait for server to be ready (max 10 seconds)
     start_time = time.time()
     server_ready = False
-    
+
     while time.time() - start_time < 10:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -128,14 +129,14 @@ def server_process(server_port: int, config_file: Path):
         except Exception:
             pass
         time.sleep(0.1)
-    
+
     if not server_ready:
         process.kill()
         stdout, stderr = process.communicate(timeout=5)
         pytest.fail(f"Server failed to start.\nstdout: {stdout}\nstderr: {stderr}")
-    
+
     yield process
-    
+
     # Cleanup
     process.terminate()
     try:
