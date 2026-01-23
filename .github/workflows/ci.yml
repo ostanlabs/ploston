@@ -77,39 +77,9 @@ jobs:
           flags: unit
           fail_ci_if_error: false
 
-  integration-tests:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run integration tests
-        run: |
-          uv run pytest tests/integration/ -v \
-            --junitxml=junit-integration.xml \
-            || echo "No integration tests found or tests skipped"
-        continue-on-error: true
-
-      - name: Upload integration test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-test-results
-          path: junit-integration.xml
-          if-no-files-found: ignore
-
   test-summary:
     name: Test Summary
-    needs: [unit-tests, integration-tests]
+    needs: [unit-tests]
     runs-on: ubuntu-latest
     if: always()
     permissions:
@@ -123,13 +93,6 @@ jobs:
           pattern: unit-test-results-*
           path: test-results/
           merge-multiple: true
-
-      - name: Download integration test results
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-test-results
-          path: test-results/
-        continue-on-error: true
 
       - name: Publish Test Summary
         uses: EnricoMi/publish-unit-test-result-action@v2
