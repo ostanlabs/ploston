@@ -504,6 +504,18 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5b/f5/4ec618ed16cc4f8fb3b701563655a69816155e79e24a17b651541804721d/markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3", size = 73070 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147", size = 87321 },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -589,6 +601,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d5/2d/649d80a0ecf6a1f82632ca44bec21c0461a9d9fc8934d38cb5b319f2db5e/mcp-1.25.0.tar.gz", hash = "sha256:56310361ebf0364e2d438e5b45f7668cbb124e158bb358333cd06e49e83a6802", size = 605387 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/fc/6dc7659c2ae5ddf280477011f4213a74f806862856b796ef08f028e664bf/mcp-1.25.0-py3-none-any.whl", hash = "sha256:b37c38144a666add0862614cc79ec276e97d72aa8ca26d622818d4e278b9721a", size = 233076 },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979 },
 ]
 
 [[package]]
@@ -743,9 +764,14 @@ dev = [
     { name = "ruff" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "ploston-cli" },
+]
+
 [package.metadata]
 requires-dist = [
-    { name = "ploston-core", specifier = ">=1.0.0,<2.0.0" },
+    { name = "ploston-core", specifier = ">=1.1.0,<2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -753,9 +779,28 @@ requires-dist = [
 ]
 provides-extras = ["dev"]
 
+[package.metadata.requires-dev]
+dev = [{ name = "ploston-cli", specifier = ">=1.0.0" }]
+
+[[package]]
+name = "ploston-cli"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "httpx" },
+    { name = "ploston-core" },
+    { name = "pyyaml" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b2/1b/dba86c9bb7f46b2df6cfb058608954e3f120986e575d06644b192f704429/ploston_cli-1.0.0.tar.gz", hash = "sha256:0443b136b005ca20cb02a2251a36a63b8fd7516e72358f9247a01a37c95de119", size = 90140 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/13/19e5c45e1813d6b8297ec5c0f37478971971c866a586a0b072680ac844da/ploston_cli-1.0.0-py3-none-any.whl", hash = "sha256:c6198a8d23b0c61f889154f148b82a4c051f951af29d327d726656c3eeccbb85", size = 17904 },
+]
+
 [[package]]
 name = "ploston-core"
-version = "1.0.0"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -774,9 +819,9 @@ dependencies = [
     { name = "structlog" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/d0/a3df841e9dba36977fc2692f01b5fbab3dc57d3fe376604ea2518101061a/ploston_core-1.0.0.tar.gz", hash = "sha256:a34c4456946c9b3c934b14cf5b7250911fb857d6adf2983027b40794eacf08bd", size = 128953 }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/58/4b8dd62878f1f4ccf203aeba86dd45ff319c7815cf950c8f464622c245c6/ploston_core-1.1.0.tar.gz", hash = "sha256:e7d8c577a5be88ae40d7efbaa06da5cdb1a8bc41b741f6e05b31accf2d996864", size = 131675 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/01/02856d8d8facecd666e7db87ffba4d1928fc6399c1173fa700eeba1086b0/ploston_core-1.0.0-py3-none-any.whl", hash = "sha256:67d3e14865cff17090aa55a0667783d2b7721f3633aeda987f40fa031f778349", size = 152709 },
+    { url = "https://files.pythonhosted.org/packages/b2/d7/740fa3a2aef1a9fad3f295a9cf63bdd194455f1f1201542babd61211ce01/ploston_core-1.1.0-py3-none-any.whl", hash = "sha256:179dc4146d98f9a51e6fbfbff620626d70e765f675ff9637ebdc208daad6037f", size = 155972 },
 ]
 
 [[package]]
@@ -1090,6 +1135,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz", hash = "sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf", size = 134517 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl", hash = "sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6", size = 64738 },
+]
+
+[[package]]
+name = "rich"
+version = "14.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/d2/8920e102050a0de7bfabeb4c4614a49248cf8d5d7a8d01885fbb24dc767a/rich-14.2.0.tar.gz", hash = "sha256:73ff50c7c0c1c77c8243079283f4edb376f0f6442433aecb8ce7e6d0b92d1fe4", size = 219990 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl", hash = "sha256:76bc51fe2e57d2b1be1f96c524b890b816e334ab4c1e45888799bfaab0021edd", size = 243393 },
 ]
 
 [[package]]

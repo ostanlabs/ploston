@@ -95,7 +95,7 @@ jobs:
       - name: Run integration tests
         run: |
           uv run pytest tests/integration/ -v \
-            -m "not homelab and not docker" \
+            -m "not homelab and not docker and not mcp_client and not mcp_http_client" \
             --junitxml=junit-integration.xml
 
       - name: Upload integration test results
