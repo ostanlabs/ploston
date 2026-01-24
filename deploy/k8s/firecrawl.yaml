@@ -4,9 +4,72 @@
 # Firecrawl provides web scraping capabilities for the Ploston stack.
 # Used by native-tools for firecrawl_scrape, firecrawl_search, etc.
 #
+# Requires:
+#   - Redis (redis service in the same namespace)
+#   - Playwright service (deployed below)
+#
 # Usage:
 #   kubectl apply -f firecrawl.yaml
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# Playwright Service - Required for JS rendering
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playwright-service
+  namespace: ploston
+  labels:
+    app: playwright-service
+    component: scraping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: playwright-service
+  template:
+    metadata:
+      labels:
+        app: playwright-service
+        component: scraping
+    spec:
+      containers:
+        - name: playwright-service
+          image: ghcr.io/firecrawl/playwright-service:latest
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: playwright-service
+  namespace: ploston
+  labels:
+    app: playwright-service
+spec:
+  selector:
+    app: playwright-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  type: ClusterIP
+---
+# -----------------------------------------------------------------------------
+# Firecrawl API Service
+# -----------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +91,7 @@ spec:
     spec:
       containers:
         - name: firecrawl
-          image: mendableai/firecrawl:latest
+          image: ghcr.io/firecrawl/firecrawl:latest
           ports:
             - containerPort: 3002
               name: http
@@ -37,10 +100,18 @@ spec:
               value: "3002"
             - name: HOST
               value: "0.0.0.0"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: REDIS_RATE_LIMIT_URL
+              value: "redis://redis:6379"
+            - name: PLAYWRIGHT_MICROSERVICE_URL
+              value: "http://playwright-service:3000/scrape"
+            - name: USE_DB_AUTHENTICATION
+              value: "false"
           resources:
             requests:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "500m"
+              memory: "512Mi"
             limits:
               cpu: "2000m"
               memory: "2Gi"
@@ -48,7 +119,7 @@ spec:
             httpGet:
               path: /health
               port: 3002
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
@@ -56,7 +127,7 @@ spec:
             httpGet:
               path: /health
               port: 3002
-            initialDelaySeconds: 10
+            initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
