@@ -46,8 +46,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # For push to main: tag as 'dev' (moving tag) + 'dev-<sha>' (pinnable)
-            type=raw,value=dev,enable=${{ github.event_name == 'push' }}
+            # For push to main: tag as 'dev-<sha>' (unique per commit)
             type=sha,prefix=dev-,format=short,enable=${{ github.event_name == 'push' }}
             # For releases: use the release tag (e.g., v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
@@ -85,7 +84,8 @@ jobs:
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "docker pull ostanlabs/ploston:latest" >> $GITHUB_STEP_SUMMARY
           else
-            echo "docker pull ostanlabs/ploston:dev" >> $GITHUB_STEP_SUMMARY
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "docker pull ostanlabs/ploston:dev-${SHORT_SHA}" >> $GITHUB_STEP_SUMMARY
           fi
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
