@@ -1,14 +1,18 @@
 # =============================================================================
 # Native Tools Dockerfile - MCP server with filesystem, network, data tools
 # =============================================================================
-# Build: docker build -t native-tools:latest -f docker/native-tools/Dockerfile .
-# Run:   docker run native-tools:latest
+# Build: docker build -t ostanlabs/native-tools:latest -f docker/native-tools/Dockerfile .
+# Run:   docker run -p 8081:8081 ostanlabs/native-tools:latest
+# =============================================================================
+# This Dockerfile is for CI/publishing - it installs from PyPI.
+# For local development, use the Dockerfile in the meta-repo which builds
+# from local source packages.
 # =============================================================================
 # Target size: <400MB
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Builder - Install dependencies
+# Stage 1: Builder - Install dependencies from PyPI
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
@@ -17,22 +21,14 @@ WORKDIR /app
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast dependency resolution
-RUN pip install --no-cache-dir uv
-
-# Copy pyproject.toml for dependency installation
-COPY pyproject.toml ./
-
-# Create virtual environment and install dependencies
-RUN uv venv /app/.venv && \
+# Create virtual environment and install packages from PyPI
+# ploston[native-tools] includes ploston-core and fastmcp
+RUN python -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    pip install --no-cache-dir \
-        ploston-core[tools] \
-        fastmcp>=2.0.0 \
-        structlog>=25.4.0
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir "ploston[native-tools]"
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
@@ -52,12 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy native tools server code
-COPY src/ploston/native_tools/ ./src/ploston/native_tools/
-
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
@@ -68,7 +60,13 @@ ENV DOCKER_CONTAINER=1
 ENV NATIVE_TOOLS_HOST=0.0.0.0
 ENV NATIVE_TOOLS_PORT=8081
 
-# Optional service endpoints (can be overridden)
+# Redis configuration store (optional)
+ENV REDIS_URL=""
+ENV REDIS_CONFIG_PREFIX="ploston:config"
+ENV REDIS_CONFIG_CHANNEL="ploston:config:changed"
+ENV REDIS_SERVICE_NAME="native-tools"
+
+# Optional service endpoints (can be overridden via Redis config)
 ENV FIRECRAWL_BASE_URL=""
 ENV FIRECRAWL_API_KEY=""
 ENV KAFKA_BOOTSTRAP_SERVERS=""
@@ -91,4 +89,4 @@ USER nativetools
 WORKDIR /data
 
 # Default command: start native tools MCP server in HTTP mode
-CMD ["python", "-c", "from ploston.native_tools.server import mcp; mcp.run(transport='http', host='0.0.0.0', port=8081)"]
+CMD ["python", "-m", "ploston.native_tools.server"]

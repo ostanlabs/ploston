@@ -57,6 +57,7 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: ostanlabs/ploston
+  NATIVE_TOOLS_IMAGE_NAME: ostanlabs/native-tools
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -204,7 +205,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Build and push Docker image
+      - name: Build and push ploston Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -216,18 +217,45 @@ jobs:
           build-args: |
             BUILD_SHA=${{ github.sha }}
             BUILD_DATE=${{ steps.vars.outputs.timestamp }}
-      
+
+      - name: Extract metadata for native-tools
+        id: meta-native-tools
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.tag }}
+
+      - name: Build and push native-tools Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/native-tools/Dockerfile
+          push: true
+          tags: ${{ steps.meta-native-tools.outputs.tags }}
+          labels: ${{ steps.meta-native-tools.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
+
       - name: Output image info
         run: |
-          echo "## RC Image Built 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "## RC Images Built 🐳" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ steps.vars.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Ploston" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Native Tools" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ steps.vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "To test locally:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ steps.vars.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
@@ -249,6 +277,7 @@ jobs:
           client-payload: |
             {
               "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}",
+              "native_tools_image": "${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}",
               "tag": "${{ needs.build-rc.outputs.tag }}",
               "sha": "${{ needs.build-rc.outputs.sha }}",
               "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
@@ -264,7 +293,8 @@ jobs:
           echo "## E2E Tests Triggered 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Meta-repo will now run E2E tests against:" >> $GITHUB_STEP_SUMMARY
-          echo "\`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | SHA |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-----|" >> $GITHUB_STEP_SUMMARY
