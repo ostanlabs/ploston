@@ -15,14 +15,20 @@ class TestStartupModeDetection:
     """Tests for startup mode detection."""
 
     def test_startup_no_config_enters_configuration_mode(self):
-        """Test that startup without config enters Configuration Mode."""
+        """Test that startup without config uses defaults and can enter Configuration Mode.
+
+        Note: ConfigLoader.load() now uses defaults when config file doesn't exist
+        (use_defaults=True by default). This allows the server to start without a
+        config file. The mode manager can still be initialized in CONFIGURATION mode
+        if needed.
+        """
         config_loader = ConfigLoader()
 
-        # Try to load from non-existent path
-        with pytest.raises(Exception):
-            config_loader.load("/nonexistent/config.yaml")
+        # Load from non-existent path - should use defaults instead of raising
+        config = config_loader.load("/nonexistent/config.yaml")
+        assert config is not None  # Should return default config
 
-        # Mode should be CONFIGURATION when no config
+        # Mode can still be CONFIGURATION when explicitly set
         mode_manager = ModeManager(initial_mode=Mode.CONFIGURATION)
         assert mode_manager.mode == Mode.CONFIGURATION
 
