@@ -44,8 +44,9 @@ class TestCoreModuleParity:
 
     def test_mcp_frontend_has_dual_mode_support(self):
         """Test that MCPFrontend supports dual-mode (MCP + REST)."""
-        from ploston_core.mcp_frontend import MCPFrontend
         import inspect
+
+        from ploston_core.mcp_frontend import MCPFrontend
 
         sig = inspect.signature(MCPFrontend.__init__)
         params = list(sig.parameters.keys())
@@ -55,8 +56,9 @@ class TestCoreModuleParity:
 
     def test_rest_api_create_function_exists(self):
         """Test that create_rest_app function exists."""
-        from ploston_core.api.app import create_rest_app
         import inspect
+
+        from ploston_core.api.app import create_rest_app
 
         sig = inspect.signature(create_rest_app)
         params = list(sig.parameters.keys())
@@ -73,11 +75,13 @@ class TestServerEntryPointParity:
     def test_ploston_server_has_main(self):
         """Test that ploston.server has main() function."""
         from ploston.server import main
+
         assert callable(main)
 
     def test_ploston_server_has_plost_application(self):
         """Test that ploston.server exports PlostApplication."""
         from ploston.server import PlostApplication
+
         assert PlostApplication is not None
 
 
@@ -152,5 +156,7 @@ class TestAPIEndpointParity:
 
         # Check routes exist
         routes = [route.path for route in app.routes]
-        assert any("/workflows" in route for route in routes), f"No workflows route found in {routes}"
+        assert any("/workflows" in route for route in routes), (
+            f"No workflows route found in {routes}"
+        )
         assert any("/tools" in route for route in routes), f"No tools route found in {routes}"
