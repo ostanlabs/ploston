@@ -76,8 +76,10 @@ jobs:
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
+      tag: ${{ steps.vars.outputs.tag }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
       sha: ${{ steps.sha.outputs.sha }}
+      core_short_sha: ${{ steps.vars.outputs.core_short_sha }}
       core_sha: ${{ steps.core.outputs.sha }}
       triggered_by: ${{ steps.trigger.outputs.source }}
 
@@ -175,22 +177,29 @@ jobs:
       - name: Set variables
         id: vars
         run: |
-          echo "short_sha=${{ steps.sha.outputs.short_sha }}" >> $GITHUB_OUTPUT
+          # Tag format: rc-<ploston-hash>-core-<core-hash>
+          PLOSTON_SHA="${{ steps.sha.outputs.short_sha }}"
+          CORE_SHA="${{ steps.core.outputs.short_sha }}"
+          TAG="rc-${PLOSTON_SHA}-core-${CORE_SHA}"
+          echo "Image tag: $TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$PLOSTON_SHA" >> $GITHUB_OUTPUT
+          echo "core_short_sha=$CORE_SHA" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
-      
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=rc-${{ steps.vars.outputs.short_sha }}
+            type=raw,value=${{ steps.vars.outputs.tag }}
             type=raw,value=rc-latest
       
       - name: Set up Docker Buildx
@@ -240,18 +249,25 @@ jobs:
           event-type: rc-ready
           client-payload: |
             {
-              "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}",
+              "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}",
+              "tag": "${{ needs.build-rc.outputs.tag }}",
               "sha": "${{ needs.build-rc.outputs.sha }}",
               "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
               "core_sha": "${{ needs.build-rc.outputs.core_sha }}",
+              "core_short_sha": "${{ needs.build-rc.outputs.core_short_sha }}",
               "triggered_by": "${{ needs.build-rc.outputs.triggered_by }}",
               "ref": "${{ github.ref }}",
               "actor": "${{ github.actor }}"
             }
-      
+
       - name: Summary
         run: |
           echo "## E2E Tests Triggered 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Meta-repo will now run E2E tests against:" >> $GITHUB_STEP_SUMMARY
-          echo "\`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | SHA |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| ploston | \`${{ needs.build-rc.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ploston-core | \`${{ needs.build-rc.outputs.core_short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
