@@ -25,6 +25,13 @@ spec:
           env:
             - name: AEL_CONFIG_PATH
               value: "/app/config/ploston-config.yaml"
+            # Redis configuration store
+            - name: REDIS_URL
+              value: "redis://ploston-redis:6379/0"
+            - name: REDIS_CONFIG_PREFIX
+              value: "ploston:config"
+            - name: REDIS_CONFIG_CHANNEL
+              value: "ploston:config:changed"
           envFrom:
             - configMapRef:
                 name: ploston-config
