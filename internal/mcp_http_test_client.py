@@ -1,116 +1,81 @@
 #!/usr/bin/env python3
 """
-MCP HTTP Test Client - Simulates an MCP client for testing AEL over HTTP transport.
+MCP HTTP Test Client - Simulates an MCP client for testing Ploston over HTTP transport.
 
-This utility starts AEL with HTTP transport and communicates via HTTP using the
-MCP protocol (JSON-RPC). Useful for:
-- Testing AEL's HTTP transport functionality
-- Faster iteration during development
-- Automated integration testing with HTTP
+This utility connects to a Ploston server via HTTP and communicates using the
+MCP protocol (JSON-RPC). Designed for use with docker-compose or any running server.
 
 Usage:
-    # Interactive mode
-    python internal/mcp_http_test_client.py -c internal/ael-config.yaml
+    # Connect to docker-compose server (default: localhost:8082)
+    python internal/mcp_http_test_client.py --list-tools
 
-    # Run a single command
-    python internal/mcp_http_test_client.py -c internal/ael-config.yaml --list-tools
-    python internal/mcp_http_test_client.py -c internal/ael-config.yaml --call workflow:fetch-url '{"url": "https://httpbin.org/get"}'
+    # Connect to custom host/port
+    python internal/mcp_http_test_client.py --host localhost --port 8080 --list-tools
+
+    # Call a tool
+    python internal/mcp_http_test_client.py --call http_request '{"url": "https://httpbin.org/get", "method": "GET"}'
+
+    # Run a workflow
+    python internal/mcp_http_test_client.py --workflow fetch-url '{"url": "https://httpbin.org/get"}'
+
+Environment Variables:
+    PLOSTON_HOST: Server host (default: 127.0.0.1)
+    PLOSTON_PORT: Server port (default: 8082 for docker-compose test server)
 """
 
 import argparse
 import json
-import subprocess
+import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 import requests
 
 
 class MCPHTTPTestClient:
-    """MCP client that communicates with AEL via HTTP."""
+    """MCP client that communicates with Ploston server via HTTP."""
 
     def __init__(
         self,
-        config_path: str,
-        ael_command: str | None = None,
         host: str = "127.0.0.1",
-        port: int = 8080,
+        port: int = 8082,
     ):
-        self.config_path = Path(config_path).resolve()
-        self.ael_command = ael_command or self._find_ael()
         self.host = host
         self.port = port
         self.base_url = f"http://{host}:{port}"
-        self.process: subprocess.Popen | None = None
         self._msg_id = 0
         self._session_id: str | None = None
-
-    def _find_ael(self) -> str:
-        """Find the ploston command in the virtualenv."""
-        # Try common locations - check for both ploston and ael
-        candidates = [
-            Path(__file__).parent.parent / ".venv" / "bin" / "ploston",
-            Path(sys.executable).parent / "ploston",
-            Path(__file__).parent.parent / ".venv" / "bin" / "ael",
-            Path(sys.executable).parent / "ael",
-        ]
-        for candidate in candidates:
-            if candidate.exists():
-                return str(candidate)
-        # Fall back to PATH - prefer ploston
-        return "ploston"
 
     def _next_id(self) -> int:
         self._msg_id += 1
         return self._msg_id
 
-    def start(self) -> None:
-        """Start AEL as a subprocess with HTTP transport."""
-        cmd = [
-            self.ael_command,
-            "-c", str(self.config_path),
-            "serve",
-            "--transport", "http",
-            "--host", self.host,
-            "--port", str(self.port),
-        ]
-        self.process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.config_path.parent.parent,
-        )
-        print(f"[CLIENT] Started AEL HTTP server (PID: {self.process.pid})", file=sys.stderr)
+    def wait_for_server(self, timeout: int = 30) -> bool:
+        """Wait for the HTTP server to be ready.
 
-        # Wait for server to be ready
-        self._wait_for_server()
-
-    def _wait_for_server(self, timeout: int = 30) -> None:
-        """Wait for the HTTP server to be ready."""
+        Returns:
+            True if server is ready, False if timeout.
+        """
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
                 response = requests.get(f"{self.base_url}/health", timeout=1)
                 if response.status_code == 200:
                     print(f"[CLIENT] Server ready at {self.base_url}", file=sys.stderr)
-                    return
+                    return True
             except requests.exceptions.ConnectionError:
                 pass
             time.sleep(0.5)
-        raise RuntimeError(f"Server did not start within {timeout} seconds")
+        return False
 
-    def stop(self) -> None:
-        """Stop AEL subprocess."""
-        if self.process:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-            print("[CLIENT] Stopped AEL", file=sys.stderr)
+    def is_server_running(self) -> bool:
+        """Check if the server is running."""
+        try:
+            response = requests.get(f"{self.base_url}/health", timeout=2)
+            return response.status_code == 200
+        except requests.exceptions.ConnectionError:
+            return False
 
     def send(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a JSON-RPC request via HTTP."""
@@ -239,60 +204,118 @@ def interactive_mode(client: MCPHTTPTestClient) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MCP HTTP Test Client for AEL")
-    parser.add_argument("-c", "--config", required=True, help="Path to AEL config file")
-    parser.add_argument("--ael", help="Path to ael command (auto-detected if not specified)")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to connect to (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8080, help="Port to connect to (default: 8080)")
+    # Default port is 8082 (docker-compose test server)
+    default_host = os.environ.get("PLOSTON_HOST", "127.0.0.1")
+    default_port = int(os.environ.get("PLOSTON_PORT", "8082"))
+
+    parser = argparse.ArgumentParser(
+        description="MCP HTTP Test Client for Ploston",
+        epilog="""
+Examples:
+  # Start docker-compose first:
+  docker compose -f docker-compose.test.yml up -d
+
+  # Then run tests:
+  python internal/mcp_http_test_client.py --list-tools
+  python internal/mcp_http_test_client.py --call http_request '{"url": "https://httpbin.org/get", "method": "GET"}'
+  python internal/mcp_http_test_client.py --workflow fetch-url '{"url": "https://httpbin.org/get"}'
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--host",
+        default=default_host,
+        help=f"Server host (default: {default_host}, or PLOSTON_HOST env var)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=default_port,
+        help=f"Server port (default: {default_port}, or PLOSTON_PORT env var)",
+    )
     parser.add_argument("--list-tools", action="store_true", help="List tools and exit")
-    parser.add_argument("--call", nargs=2, metavar=("TOOL", "ARGS"), help="Call a tool with JSON args")
-    parser.add_argument("--workflow", nargs=2, metavar=("NAME", "INPUTS"), help="Run a workflow with JSON inputs")
+    parser.add_argument(
+        "--call",
+        nargs=2,
+        metavar=("TOOL", "ARGS"),
+        help="Call a tool with JSON args",
+    )
+    parser.add_argument(
+        "--workflow",
+        nargs=2,
+        metavar=("NAME", "INPUTS"),
+        help="Run a workflow with JSON inputs",
+    )
+    parser.add_argument(
+        "--wait",
+        type=int,
+        default=0,
+        metavar="SECONDS",
+        help="Wait up to N seconds for server to be ready (default: 0, fail immediately if not ready)",
+    )
 
     args = parser.parse_args()
 
-    client = MCPHTTPTestClient(args.config, args.ael, args.host, args.port)
+    client = MCPHTTPTestClient(args.host, args.port)
 
-    try:
-        client.start()
+    # Check if server is running
+    if args.wait > 0:
+        if not client.wait_for_server(timeout=args.wait):
+            print(
+                f"[ERROR] Server not ready at {client.base_url} after {args.wait}s",
+                file=sys.stderr,
+            )
+            print(
+                "[ERROR] Start the server with: docker compose -f docker-compose.test.yml up -d",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    elif not client.is_server_running():
+        print(f"[ERROR] Server not running at {client.base_url}", file=sys.stderr)
+        print(
+            "[ERROR] Start the server with: docker compose -f docker-compose.test.yml up -d",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        # Always initialize first
-        init_response = client.initialize()
-        print(f"[CLIENT] Connected to: {init_response.get('result', {}).get('serverInfo', {})}", file=sys.stderr)
+    # Initialize MCP session
+    init_response = client.initialize()
+    print(
+        f"[CLIENT] Connected to: {init_response.get('result', {}).get('serverInfo', {})}",
+        file=sys.stderr,
+    )
 
-        if args.list_tools:
-            tools = client.list_tools()
-            print(f"\n{'='*60}")
-            print(f"Available Tools ({len(tools)})")
-            print(f"{'='*60}\n")
-            for t in sorted(tools, key=lambda x: x["name"]):
-                desc = t.get("description", "")[:50]
-                print(f"  {t['name']:<40} {desc}")
-            print()
+    if args.list_tools:
+        tools = client.list_tools()
+        print(f"\n{'='*60}")
+        print(f"Available Tools ({len(tools)})")
+        print(f"{'='*60}\n")
+        for t in sorted(tools, key=lambda x: x["name"]):
+            desc = t.get("description", "")[:50]
+            print(f"  {t['name']:<40} {desc}")
+        print()
 
-        elif args.call:
-            tool_name, args_json = args.call
-            arguments = json.loads(args_json)
-            result = client.call_tool(tool_name, arguments)
-            print(f"\n{'='*60}")
-            print(f"Tool: {tool_name}")
-            print(f"{'='*60}")
-            print_json(result)
+    elif args.call:
+        tool_name, args_json = args.call
+        arguments = json.loads(args_json)
+        result = client.call_tool(tool_name, arguments)
+        print(f"\n{'='*60}")
+        print(f"Tool: {tool_name}")
+        print(f"{'='*60}")
+        print_json(result)
 
-        elif args.workflow:
-            workflow_name, inputs_json = args.workflow
-            inputs = json.loads(inputs_json)
-            result = client.call_tool(f"workflow:{workflow_name}", inputs)
-            print(f"\n{'='*60}")
-            print(f"Workflow: {workflow_name}")
-            print(f"{'='*60}")
-            print_json(result)
+    elif args.workflow:
+        workflow_name, inputs_json = args.workflow
+        inputs = json.loads(inputs_json)
+        result = client.call_tool(f"workflow:{workflow_name}", inputs)
+        print(f"\n{'='*60}")
+        print(f"Workflow: {workflow_name}")
+        print(f"{'='*60}")
+        print_json(result)
 
-        else:
-            # Interactive mode
-            interactive_mode(client)
-
-    finally:
-        client.stop()
+    else:
+        # Interactive mode
+        interactive_mode(client)
 
 
 if __name__ == "__main__":
