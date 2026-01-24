@@ -1261,7 +1261,7 @@ dev = [
 requires-dist = [
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "fastmcp", marker = "extra == 'native-tools'", specifier = ">=2.0.0" },
-    { name = "ploston-core", specifier = ">=1.2.0,<2.0.0" },
+    { name = "ploston-core", specifier = ">=1.3.0,<2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -1293,7 +1293,7 @@ wheels = [
 
 [[package]]
 name = "ploston-core"
-version = "1.2.0"
+version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1307,14 +1307,15 @@ dependencies = [
     { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "redis" },
     { name = "sse-starlette" },
     { name = "starlette" },
     { name = "structlog" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/5b/643ff31aaf347f26cdec28303022b0347d9a30f83387bf049f8e34678cae/ploston_core-1.2.0.tar.gz", hash = "sha256:d230b9e543b26682d3254b787a0dac96df6100a3c8fdc7e6cdb91855d800d55c", size = 149082 }
+sdist = { url = "https://files.pythonhosted.org/packages/26/4c/219f81ea39c7c0c86d7837f7b0ba5da3932d2af56e346da3ce6f59502090/ploston_core-1.3.0.tar.gz", hash = "sha256:23ab43035af1b46af229a1d97704733947111fd7c9bce559046ebef47ab50d63", size = 182634 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f0/26/85536d6f3a00731b43ce3e3cb8f3dfcbd5e00634663ba3f8ee7a8fbefad8/ploston_core-1.2.0-py3-none-any.whl", hash = "sha256:d5807b553ebc1fe2e375894b336bb863761b0f2a1383808ba7e24a546998219b", size = 178028 },
+    { url = "https://files.pythonhosted.org/packages/c8/4f/7734e746e18e4ac4c1e08ef25beadcf8cfb1f64c9d7efd7ac1b1c1b9b213/ploston_core-1.3.0-py3-none-any.whl", hash = "sha256:8ba53fc9269795dbac4a5b247828018301bcd100573a0b1e9ae2f0b847222446", size = 184835 },
 ]
 
 [[package]]
