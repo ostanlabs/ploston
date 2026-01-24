@@ -61,6 +61,8 @@ from ploston_core.native_tools import (
     consume_messages_kafka,
     create_topic_kafka,
     delete_file_or_directory,
+    # Health management
+    DependencyUnavailableError,
     dns_lookup,
     extract_data_firecrawl,
     extract_metadata,
@@ -69,6 +71,7 @@ from ploston_core.native_tools import (
     extract_text_content,
     # ML
     generate_text_embedding,
+    get_health_manager,
     list_directory_content,
     list_topics_kafka,
     # Network
@@ -332,6 +335,26 @@ async def extract_file_metadata(file_path: str) -> Dict[str, Any]:
 
 
 # =============================================================================
+# Dependency Check Helper
+# =============================================================================
+
+
+def _check_dependency(dependency: str) -> None:
+    """Check if a dependency is healthy, raise error if not.
+
+    Args:
+        dependency: Name of the dependency (kafka, ollama, firecrawl)
+
+    Raises:
+        DependencyUnavailableError: If the dependency is unhealthy
+    """
+    health_manager = get_health_manager()
+    if not health_manager.is_dependency_healthy(dependency):
+        error_msg = health_manager.get_dependency_error(dependency)
+        raise DependencyUnavailableError(dependency, error_msg)
+
+
+# =============================================================================
 # Kafka Tools
 # =============================================================================
 
@@ -341,6 +364,7 @@ async def kafka_publish(
     topic: str, message: Any, key: Optional[str] = None, timeout: int = 30
 ) -> Dict[str, Any]:
     """Publish a message to a Kafka topic."""
+    _check_dependency("kafka")
     return await publish_message_kafka(
         topic=topic,
         message=message,
@@ -358,6 +382,7 @@ async def kafka_publish(
 @mcp.tool()
 async def kafka_list_topics(timeout: int = 30) -> Dict[str, Any]:
     """List all Kafka topics."""
+    _check_dependency("kafka")
     return await list_topics_kafka(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         client_id=KAFKA_CLIENT_ID,
@@ -374,6 +399,7 @@ async def kafka_create_topic(
     topic: str, num_partitions: int = 1, replication_factor: int = 1, timeout: int = 30
 ) -> Dict[str, Any]:
     """Create a new Kafka topic."""
+    _check_dependency("kafka")
     return await create_topic_kafka(
         topic=topic,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -393,6 +419,7 @@ async def kafka_consume(
     topic: str, group_id: str = "mcp-consumer", max_messages: int = 10, timeout: int = 30
 ) -> Dict[str, Any]:
     """Consume messages from a Kafka topic."""
+    _check_dependency("kafka")
     return await consume_messages_kafka(
         topic=topic,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -410,6 +437,7 @@ async def kafka_consume(
 @mcp.tool()
 async def kafka_health(timeout: int = 10) -> Dict[str, Any]:
     """Check Kafka cluster health."""
+    # Note: kafka_health doesn't check dependency - it's used to check health
     return await check_health_kafka(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         client_id=KAFKA_CLIENT_ID,
@@ -429,6 +457,7 @@ async def kafka_health(timeout: int = 10) -> Dict[str, Any]:
 @mcp.tool()
 async def ml_embed_text(text: str, model: Optional[str] = None) -> Dict[str, Any]:
     """Generate text embeddings using Ollama."""
+    _check_dependency("ollama")
     return await generate_text_embedding(
         text=text, model=model or DEFAULT_EMBEDDING_MODEL, ollama_host=OLLAMA_HOST
     )
@@ -439,6 +468,9 @@ async def ml_text_similarity(
     text1: str, text2: str, method: str = "cosine", model: Optional[str] = None
 ) -> Dict[str, Any]:
     """Calculate similarity between two texts."""
+    # Only check ollama if using embedding-based similarity
+    if method in ("cosine", "euclidean"):
+        _check_dependency("ollama")
     return await calculate_text_similarity(
         text1=text1,
         text2=text2,
@@ -453,6 +485,7 @@ async def ml_classify_text(
     text: str, categories: List[str], model: Optional[str] = None
 ) -> Dict[str, Any]:
     """Classify text into predefined categories."""
+    _check_dependency("ollama")
     return await classify_text(
         text=text,
         categories=categories,
@@ -464,6 +497,7 @@ async def ml_classify_text(
 @mcp.tool()
 async def ml_analyze_sentiment(text: str, method: str = "lexicon") -> Dict[str, Any]:
     """Analyze sentiment of text."""
+    # Note: lexicon-based sentiment doesn't require Ollama
     return await analyze_sentiment(text=text, method=method)
 
 
@@ -481,6 +515,7 @@ async def firecrawl_search(
     exclude_domains: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Search the web using Firecrawl."""
+    _check_dependency("firecrawl")
     return await search_web_firecrawl(
         query=query,
         base_url=FIRECRAWL_BASE_URL,
@@ -497,6 +532,7 @@ async def firecrawl_map(
     url: str, limit: int = 1000, exclude_tags: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """Map a website to discover all URLs."""
+    _check_dependency("firecrawl")
     return await map_website_firecrawl(
         url=url,
         base_url=FIRECRAWL_BASE_URL,
@@ -511,6 +547,7 @@ async def firecrawl_extract(
     urls: List[str], schema: Optional[Dict[str, Any]] = None, prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """Extract structured data from URLs."""
+    _check_dependency("firecrawl")
     return await extract_data_firecrawl(
         urls=urls,
         base_url=FIRECRAWL_BASE_URL,
@@ -523,6 +560,7 @@ async def firecrawl_extract(
 @mcp.tool()
 async def firecrawl_health() -> Dict[str, Any]:
     """Check Firecrawl service health."""
+    # Note: firecrawl_health doesn't check dependency - it's used to check health
     return await check_health_firecrawl(base_url=FIRECRAWL_BASE_URL)
 
 
@@ -533,13 +571,53 @@ async def firecrawl_health() -> Dict[str, Any]:
 
 @mcp.tool()
 async def health_check() -> Dict[str, Any]:
-    """Check native-tools health status including Redis connection."""
+    """Check native-tools health status including dependency availability.
+
+    Returns comprehensive health information including:
+    - Overall status (healthy/degraded/unhealthy)
+    - Dependency status for Kafka, Ollama, and Firecrawl
+    - Tool availability counts
+    - Redis config connection status
+    """
+    health_manager = get_health_manager()
     config_manager = get_config_manager()
-    return {
-        "status": "healthy",
-        "service": "native-tools",
-        **config_manager.get_health_status(),
-    }
+
+    # Get health response from manager
+    health_response = health_manager.get_health_response(version="0.1.0")
+
+    # Add service name and config source
+    health_response["service"] = "native-tools"
+    health_response["config"] = config_manager.get_health_status()
+
+    return health_response
+
+
+# =============================================================================
+# Health Manager Configuration
+# =============================================================================
+
+
+def _configure_health_manager() -> None:
+    """Configure the health manager with current dependency settings."""
+    health_manager = get_health_manager()
+
+    # Configure Kafka
+    health_manager.configure_kafka(
+        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        client_id=KAFKA_CLIENT_ID,
+        security_protocol=KAFKA_SECURITY_PROTOCOL,
+        sasl_mechanism=KAFKA_SASL_MECHANISM,
+        sasl_username=KAFKA_SASL_USERNAME,
+        sasl_password=KAFKA_SASL_PASSWORD,
+    )
+
+    # Configure Ollama
+    health_manager.configure_ollama(host=OLLAMA_HOST)
+
+    # Configure Firecrawl
+    health_manager.configure_firecrawl(base_url=FIRECRAWL_BASE_URL)
+
+    print("[Health] Configured health manager for dependencies", file=sys.stderr)
 
 
 # =============================================================================
@@ -548,7 +626,7 @@ async def health_check() -> Dict[str, Any]:
 
 
 async def start_with_redis() -> None:
-    """Start the server with Redis config watcher."""
+    """Start the server with Redis config watcher and health manager."""
 
     config_manager = get_config_manager()
 
@@ -559,16 +637,30 @@ async def start_with_redis() -> None:
     else:
         print("[Startup] Running without Redis config watcher", file=sys.stderr)
 
-    # Run the MCP server
-    # Note: FastMCP's run() is blocking, so we can't easily integrate async
-    # For now, the Redis watcher runs in the background via asyncio tasks
+    # Configure and start health manager
+    _configure_health_manager()
+    health_manager = get_health_manager()
+    await health_manager.start()
+    print("[Startup] Health manager started", file=sys.stderr)
 
 
 if __name__ == "__main__":
     import asyncio
+    import os
 
-    # Start Redis watcher before running MCP server
-    asyncio.get_event_loop().run_until_complete(get_config_manager().start_redis_watcher())
+    # Start Redis watcher and health manager before running MCP server
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Start Redis watcher
+    loop.run_until_complete(get_config_manager().start_redis_watcher())
+
+    # Configure and start health manager
+    _configure_health_manager()
+    loop.run_until_complete(get_health_manager().start())
+
+    # Get port from environment or default
+    port = int(os.getenv("PORT", "8081"))
 
     # Run in HTTP mode by default for Docker deployment
-    mcp.run(transport="http", host="0.0.0.0", port=8081)
+    mcp.run(transport="http", host="0.0.0.0", port=port)
