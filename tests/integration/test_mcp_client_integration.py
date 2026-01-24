@@ -94,11 +94,14 @@ class MCPHTTPClient:
 
     def initialize(self) -> dict:
         """Send initialize request."""
-        return self.send("initialize", {
-            "protocolVersion": "2024-11-05",
-            "clientInfo": {"name": "mcp-test-client", "version": "1.0.0"},
-            "capabilities": {},
-        })
+        return self.send(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "clientInfo": {"name": "mcp-test-client", "version": "1.0.0"},
+                "capabilities": {},
+            },
+        )
 
     def list_tools(self) -> list[dict]:
         """List available tools."""
