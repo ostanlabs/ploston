@@ -2,16 +2,33 @@
 Pytest fixtures for Docker Compose integration tests.
 
 These tests run against the AEL instance running in docker-compose.
+The docker-compose environment is automatically started and stopped as part of the test session.
 """
 
 import os
-from typing import Any
+import subprocess
+import time
+from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 import requests
 
 # Default docker-compose endpoint
 DEFAULT_DOCKER_URL = "http://localhost:8082"
+
+# Path to docker-compose.test.yml relative to repo root
+DOCKER_COMPOSE_FILE = "docker-compose.test.yml"
+
+
+def get_repo_root() -> Path:
+    """Get the repository root directory."""
+    # Navigate up from this file to find the repo root
+    current = Path(__file__).resolve()
+    # Go up: conftest.py -> docker -> integration -> tests -> ploston -> packages -> repo_root
+    for _ in range(6):
+        current = current.parent
+    return current
 
 
 def get_docker_url() -> str:
@@ -101,8 +118,133 @@ class DockerMCPClient:
         return "result" in response
 
 
+def _is_docker_available() -> bool:
+    """Check if Docker is available on the system."""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def _wait_for_healthy(url: str, timeout: int = 60) -> bool:
+    """Wait for the service to become healthy."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            response = requests.get(f"{url}/health", timeout=5)
+            if response.status_code == 200:
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        time.sleep(2)
+    return False
+
+
 @pytest.fixture(scope="module")
-def docker_url() -> str:
+def docker_compose_up() -> Generator[bool, None, None]:
+    """
+    Start docker-compose environment for tests and tear it down after.
+
+    This fixture automatically:
+    1. Checks if Docker is available
+    2. Builds and starts the docker-compose.test.yml services
+    3. Waits for the service to be healthy
+    4. Yields control to tests
+    5. Tears down the environment after tests complete
+
+    If Docker is not available, yields False and tests should skip.
+    """
+    if not _is_docker_available():
+        print("Docker is not available, skipping docker-compose setup")
+        yield False
+        return
+
+    repo_root = get_repo_root()
+    compose_file = repo_root / DOCKER_COMPOSE_FILE
+
+    if not compose_file.exists():
+        print(f"Docker compose file not found: {compose_file}")
+        yield False
+        return
+
+    docker_url = get_docker_url()
+
+    # Check if already running (e.g., started manually)
+    try:
+        response = requests.get(f"{docker_url}/health", timeout=5)
+        if response.status_code == 200:
+            print(f"Docker environment already running at {docker_url}")
+            yield True
+            return
+    except requests.exceptions.RequestException:
+        pass
+
+    print(f"Starting docker-compose environment from {compose_file}...")
+
+    try:
+        # Build the images first
+        build_result = subprocess.run(
+            ["docker", "compose", "-f", str(compose_file), "build"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes for build
+        )
+        if build_result.returncode != 0:
+            print(f"Docker build failed: {build_result.stderr}")
+            yield False
+            return
+
+        # Start the services
+        up_result = subprocess.run(
+            ["docker", "compose", "-f", str(compose_file), "up", "-d"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if up_result.returncode != 0:
+            print(f"Docker compose up failed: {up_result.stderr}")
+            yield False
+            return
+
+        # Wait for healthy
+        print(f"Waiting for service to be healthy at {docker_url}...")
+        if not _wait_for_healthy(docker_url, timeout=60):
+            print("Service did not become healthy in time")
+            # Try to get logs for debugging
+            logs_result = subprocess.run(
+                ["docker", "compose", "-f", str(compose_file), "logs"],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            print(f"Container logs:\n{logs_result.stdout}\n{logs_result.stderr}")
+            yield False
+            return
+
+        print("Docker environment is ready!")
+        yield True
+
+    finally:
+        # Tear down the environment
+        print("Tearing down docker-compose environment...")
+        subprocess.run(
+            ["docker", "compose", "-f", str(compose_file), "down", "-v"],
+            cwd=str(repo_root),
+            capture_output=True,
+            timeout=60,
+        )
+
+
+@pytest.fixture(scope="module")
+def docker_url(docker_compose_up: bool) -> str:
     """Get the docker-compose AEL URL."""
     return get_docker_url()
 
@@ -114,8 +256,10 @@ def docker_client(docker_url: str) -> DockerMCPClient:
 
 
 @pytest.fixture(scope="module")
-def docker_available(docker_url: str) -> bool:
+def docker_available(docker_compose_up: bool, docker_url: str) -> bool:
     """Check if docker-compose AEL is available."""
+    if not docker_compose_up:
+        return False
     try:
         response = requests.get(f"{docker_url}/health", timeout=5)
         return response.status_code == 200

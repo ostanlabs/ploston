@@ -141,7 +141,8 @@ class TestToolEndpoints:
         self, test_client: TestClient, mock_tool_registry: MagicMock
     ) -> None:
         """Test getting a non-existent tool."""
-        mock_tool_registry.get_tool.return_value = None
+        # The API uses registry.get() not registry.get_tool()
+        mock_tool_registry.get.return_value = None
 
         response = test_client.get("/api/v1/tools/nonexistent")
         assert response.status_code == 404
