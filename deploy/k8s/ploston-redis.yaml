@@ -1,0 +1,145 @@
+# =============================================================================
+# Ploston Redis - Centralized Configuration Store
+# =============================================================================
+# Stores configuration for ploston and native-tools with pub/sub notifications
+# for reactive config updates.
+# =============================================================================
+
+---
+# PersistentVolumeClaim for Redis data persistence
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ploston-redis-pvc
+  namespace: ploston
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path  # Adjust for your cluster
+
+---
+# ConfigMap for Redis configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ploston-redis-config
+  namespace: ploston
+data:
+  redis.conf: |
+    # Persistence
+    appendonly yes
+    appendfsync everysec
+    
+    # Memory management
+    maxmemory 128mb
+    maxmemory-policy allkeys-lru
+    
+    # Security (bind to all interfaces within pod)
+    bind 0.0.0.0
+    protected-mode no
+    
+    # Logging
+    loglevel notice
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ploston-redis
+  namespace: ploston
+  labels:
+    app: ploston-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ploston-redis
+  template:
+    metadata:
+      labels:
+        app: ploston-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config
+              mountPath: /etc/redis
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: ploston-redis-pvc
+        - name: redis-config
+          configMap:
+            name: ploston-redis-config
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ploston-redis
+  namespace: ploston
+  labels:
+    app: ploston-redis
+spec:
+  selector:
+    app: ploston-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+
+---
+# NetworkPolicy - restrict access to ploston namespace only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ploston-redis-network-policy
+  namespace: ploston
+spec:
+  podSelector:
+    matchLabels:
+      app: ploston-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ploston
+      ports:
+        - protocol: TCP
+          port: 6379
