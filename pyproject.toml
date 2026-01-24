@@ -23,11 +23,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+native-tools = [
+    "fastmcp>=2.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.2.0",
+    "fastmcp>=2.0.0",  # For testing native tools server
 ]
 
 [project.scripts]
@@ -47,7 +51,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]
+ignore = ["E501", "E402"]  # E402: Module level import not at top of file (needed for logging config)
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -57,4 +61,7 @@ testpaths = ["tests"]
 dev = [
     "ploston-cli>=1.0.0",
 ]
+
+[tool.uv.sources]
+ploston-core = { path = "../ploston-core", editable = true }
 
