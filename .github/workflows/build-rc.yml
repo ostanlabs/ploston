@@ -1,16 +1,22 @@
 # =============================================================================
 # Build Release Candidate (RC) Images
 # =============================================================================
-# Builds Docker images from source and pushes to GHCR as release candidates.
+# Builds Docker images from source and pushes to Docker Hub as release candidates.
 # Triggers meta-repo to run E2E tests against the RC.
 #
 # Image tags:
-#   - ghcr.io/ostanlabs/ploston:rc-<sha>     (immutable)
-#   - ghcr.io/ostanlabs/ploston:rc-latest    (latest RC)
+#   - docker.io/ostanlabs/ploston:rc-<sha>   (immutable)
+#   - docker.io/ostanlabs/ploston:rc-latest  (latest RC)
 #
 # Triggered by:
-#   - Push to main branch
+#   - CI workflow completing successfully on main (workflow_run)
 #   - Manual workflow dispatch
+#
+# Flow:
+#   1. Push to main triggers CI workflow
+#   2. CI runs lint, unit tests, integration tests, etc.
+#   3. If CI passes, this workflow runs automatically
+#   4. Builds RC image and triggers meta-repo E2E tests
 #
 # Note: This workflow runs in the ploston package repo, but the Dockerfile
 # lives in the meta-repo. We need to checkout the meta-repo to build.
@@ -19,12 +25,11 @@
 name: Build RC
 
 on:
-  push:
+  # Trigger after CI workflow completes successfully on main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
   workflow_dispatch:
     inputs:
       skip_trigger:
@@ -44,14 +49,17 @@ jobs:
   build-rc:
     name: Build RC Image
     runs-on: ubuntu-latest
+    # Only run if CI succeeded (or if manually triggered)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
-    
+
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
-    
+      sha: ${{ steps.sha.outputs.sha }}
+
     steps:
       - name: Checkout meta-repo (contains Dockerfile)
         uses: actions/checkout@v4
@@ -60,18 +68,31 @@ jobs:
           submodules: recursive
           token: ${{ secrets.META_REPO_TOKEN }}
       
+      - name: Determine commit SHA
+        id: sha
+        run: |
+          # Use workflow_run head_sha if triggered by CI, otherwise use github.sha
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo $SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "Using commit SHA: $SHA"
+
       - name: Update ploston submodule to triggering commit
         run: |
           cd packages/ploston
-          git fetch origin ${{ github.sha }}
-          git checkout ${{ github.sha }}
+          git fetch origin ${{ steps.sha.outputs.sha }}
+          git checkout ${{ steps.sha.outputs.sha }}
           cd ../..
-          echo "Updated ploston to commit ${{ github.sha }}"
-      
+          echo "Updated ploston to commit ${{ steps.sha.outputs.sha }}"
+
       - name: Set variables
         id: vars
         run: |
-          echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "short_sha=${{ steps.sha.outputs.short_sha }}" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
       
       - name: Log in to Docker Hub
@@ -137,7 +158,7 @@ jobs:
           client-payload: |
             {
               "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}",
-              "sha": "${{ github.sha }}",
+              "sha": "${{ needs.build-rc.outputs.sha }}",
               "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
               "ref": "${{ github.ref }}",
               "actor": "${{ github.actor }}"
