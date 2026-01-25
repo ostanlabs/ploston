@@ -159,63 +159,12 @@ jobs:
           name: parity-test-results
           path: junit-parity.xml
 
-  property-tests:
-    name: Property Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run property tests
-        run: |
-          uv run pytest tests/property/ -v \
-            --junitxml=junit-property.xml
-
-      - name: Upload property test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: property-test-results
-          path: junit-property.xml
-
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run E2E tests
-        run: |
-          uv run pytest tests/e2e/ -v \
-            --junitxml=junit-e2e.xml
-
-      - name: Upload E2E test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-test-results
-          path: junit-e2e.xml
+  # NOTE: Property tests and E2E tests require a running server
+  # They are run in the meta-repo (agent-execution-layer) against Docker/homelab
 
   test-summary:
     name: Test Summary
-    needs: [unit-tests, integration-tests, smoke-tests, parity-tests, property-tests, e2e-tests]
+    needs: [unit-tests, integration-tests, smoke-tests, parity-tests]
     runs-on: ubuntu-latest
     if: always()
     permissions:
@@ -242,7 +191,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests, property-tests, e2e-tests]
+    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests]
     steps:
       - uses: actions/checkout@v4
 
@@ -270,7 +219,7 @@ jobs:
   notify-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests, property-tests, e2e-tests, build]
+    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests, build]
     if: failure() && github.ref == 'refs/heads/main'
     steps:
       - name: Send Slack notification
