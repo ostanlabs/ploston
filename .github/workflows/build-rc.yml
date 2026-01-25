@@ -1,0 +1,152 @@
+# =============================================================================
+# Build Release Candidate (RC) Images
+# =============================================================================
+# Builds Docker images from source and pushes to GHCR as release candidates.
+# Triggers meta-repo to run E2E tests against the RC.
+#
+# Image tags:
+#   - ghcr.io/ostanlabs/ploston:rc-<sha>     (immutable)
+#   - ghcr.io/ostanlabs/ploston:rc-latest    (latest RC)
+#
+# Triggered by:
+#   - Push to main branch
+#   - Manual workflow dispatch
+#
+# Note: This workflow runs in the ploston package repo, but the Dockerfile
+# lives in the meta-repo. We need to checkout the meta-repo to build.
+# =============================================================================
+
+name: Build RC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+  workflow_dispatch:
+    inputs:
+      skip_trigger:
+        description: 'Skip triggering meta-repo tests'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ostanlabs/ploston
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build and Push RC Image
+  # ---------------------------------------------------------------------------
+  build-rc:
+    name: Build RC Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    
+    steps:
+      - name: Checkout meta-repo (contains Dockerfile)
+        uses: actions/checkout@v4
+        with:
+          repository: ostanlabs/agent-execution-layer
+          submodules: recursive
+          token: ${{ secrets.META_REPO_TOKEN }}
+      
+      - name: Update ploston submodule to triggering commit
+        run: |
+          cd packages/ploston
+          git fetch origin ${{ github.sha }}
+          git checkout ${{ github.sha }}
+          cd ../..
+          echo "Updated ploston to commit ${{ github.sha }}"
+      
+      - name: Set variables
+        id: vars
+        run: |
+          echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=rc-${{ steps.vars.outputs.short_sha }}
+            type=raw,value=rc-latest
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
+      
+      - name: Output image info
+        run: |
+          echo "## RC Image Built 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ steps.vars.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To test locally:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Trigger Meta-Repo E2E Tests
+  # ---------------------------------------------------------------------------
+  trigger-e2e:
+    name: Trigger E2E Tests
+    needs: build-rc
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_trigger != 'true' }}
+    
+    steps:
+      - name: Trigger meta-repo test-rc workflow
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.META_REPO_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: rc-ready
+          client-payload: |
+            {
+              "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}",
+              "sha": "${{ github.sha }}",
+              "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
+              "ref": "${{ github.ref }}",
+              "actor": "${{ github.actor }}"
+            }
+      
+      - name: Summary
+        run: |
+          echo "## E2E Tests Triggered 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Meta-repo will now run E2E tests against:" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
