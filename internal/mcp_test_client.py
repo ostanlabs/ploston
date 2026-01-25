@@ -18,9 +18,7 @@ Usage:
 """
 
 import argparse
-import asyncio
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -77,7 +75,7 @@ class MCPTestClient:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.process.kill()
-            print(f"[CLIENT] Stopped AEL", file=sys.stderr)
+            print("[CLIENT] Stopped AEL", file=sys.stderr)
 
     def send(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for response."""

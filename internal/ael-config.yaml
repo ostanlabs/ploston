@@ -14,14 +14,13 @@
 tools:
   mcp_servers:
     native_tools:
-      command: "python ${PLOSTON_ROOT:-..}/internal/run-native-tools.py"
+      command: "python ${PLOSTON_ROOT:-.}/internal/run-native-tools.py"
       env:
         FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:-http://localhost:3002}"
         FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
         KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-localhost:29092}"
         OLLAMA_HOST: "${OLLAMA_HOST:-http://localhost:11434}"
         WORKSPACE_DIR: "${WORKSPACE_DIR:-.}"
-        PYTHONPATH: "${PLOSTON_ROOT:-..}/../agent/src"
 
 # ─────────────────────────────────────────────────────────────────
 # WORKFLOWS

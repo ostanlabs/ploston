@@ -16,7 +16,7 @@ import sys
 def check_import_compatibility():
     """Check that key imports work."""
     results = []
-    
+
     imports_to_check = [
         ("ploston_core", "PlostApplication"),
         ("ploston_core.config", "ConfigLoader"),
@@ -28,7 +28,7 @@ def check_import_compatibility():
         ("ploston.server", "main"),
         ("ploston.workflow", "WorkflowRegistry"),
     ]
-    
+
     for module, attr in imports_to_check:
         try:
             mod = importlib.import_module(module)
@@ -38,28 +38,29 @@ def check_import_compatibility():
                 results.append((f"{module}.{attr}", "MISSING"))
         except ImportError as e:
             results.append((f"{module}.{attr}", f"IMPORT ERROR: {e}"))
-    
+
     return results
 
 
 def check_server_functionality():
     """Check that server can be created."""
     results = []
-    
+
     try:
         from ploston_core import PlostApplication
         from ploston_core.types import MCPTransport
-        
-        app = PlostApplication(
+
+        _app = PlostApplication(
             transport=MCPTransport.HTTP,
             http_host="127.0.0.1",
             http_port=9999,
             with_rest_api=True,
         )
         results.append(("PlostApplication creation", "OK"))
+        del _app  # Explicitly mark as used
     except Exception as e:
         results.append(("PlostApplication creation", f"ERROR: {e}"))
-    
+
     return results
 
 
@@ -70,13 +71,13 @@ def main():
         action="store_true",
         help="Show detailed output",
     )
-    args = parser.parse_args()
-    
+    _args = parser.parse_args()  # noqa: F841 - reserved for future verbose mode
+
     print("=" * 60)
     print("Migration Verification Report")
     print("=" * 60)
     print()
-    
+
     # Check imports
     print("## Import Compatibility")
     print()
@@ -88,7 +89,7 @@ def main():
         if status != "OK":
             all_ok = False
     print()
-    
+
     # Check server functionality
     print("## Server Functionality")
     print()
@@ -99,7 +100,7 @@ def main():
         if status != "OK":
             all_ok = False
     print()
-    
+
     # Summary
     print("=" * 60)
     if all_ok:

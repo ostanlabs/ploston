@@ -23,21 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv for fast dependency resolution
 RUN pip install --no-cache-dir uv
 
-# Copy dependency files from agent submodule
-COPY agent/pyproject.toml agent/uv.lock* ./
+# Copy pyproject.toml for dependency installation
+COPY pyproject.toml ./
 
 # Create virtual environment and install dependencies
 RUN uv venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    uv sync --frozen --no-dev 2>/dev/null || \
     pip install --no-cache-dir \
-        click>=8.2.1 \
-        structlog>=25.4.0 \
-        aiohttp>=3.8.0 \
-        httpx>=0.24.0 \
-        pydantic>=2.0.0 \
-        pyyaml>=6.0 \
-        fastmcp>=2.0.0
+        ploston-core[tools] \
+        fastmcp>=2.0.0 \
+        structlog>=25.4.0
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
@@ -57,8 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy native tools source code
-COPY agent/src/ ./src/
+# Copy native tools server code
+COPY src/ploston/native_tools/ ./src/ploston/native_tools/
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
@@ -96,6 +91,4 @@ USER nativetools
 WORKDIR /data
 
 # Default command: start native tools MCP server in HTTP mode
-# FastMCP supports both stdio and HTTP transports
-# For HTTP mode, we use a Python command to run with transport="http"
-CMD ["python", "-c", "from native_tools.server import mcp; mcp.run(transport='http', host='0.0.0.0', port=8081)"]
+CMD ["python", "-c", "from ploston.native_tools.server import mcp; mcp.run(transport='http', host='0.0.0.0', port=8081)"]
