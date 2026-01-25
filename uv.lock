@@ -1137,7 +1137,7 @@ dev = [
 requires-dist = [
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "fastmcp", marker = "extra == 'native-tools'", specifier = ">=2.0.0" },
-    { name = "ploston-core", editable = "../ploston-core" },
+    { name = "ploston-core", specifier = ">=1.2.0,<2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -1166,8 +1166,8 @@ wheels = [
 
 [[package]]
 name = "ploston-core"
-version = "1.1.0"
-source = { editable = "../ploston-core" }
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1185,33 +1185,10 @@ dependencies = [
     { name = "structlog" },
     { name = "uvicorn" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "kafka-python", marker = "extra == 'kafka'", specifier = ">=2.0.0" },
-    { name = "kafka-python", marker = "extra == 'tools'", specifier = ">=2.0.0" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "opentelemetry-api", specifier = ">=1.20.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.20.0" },
-    { name = "opentelemetry-exporter-prometheus", specifier = ">=0.45b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.20.0" },
-    { name = "prometheus-client", specifier = ">=0.19.0" },
-    { name = "pydantic", specifier = ">=2.5.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.2.0" },
-    { name = "sse-starlette", specifier = ">=1.8.0" },
-    { name = "starlette", specifier = ">=0.37.2" },
-    { name = "structlog", specifier = ">=24.1.0" },
-    { name = "uvicorn", specifier = ">=0.27.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/4a/5b/643ff31aaf347f26cdec28303022b0347d9a30f83387bf049f8e34678cae/ploston_core-1.2.0.tar.gz", hash = "sha256:d230b9e543b26682d3254b787a0dac96df6100a3c8fdc7e6cdb91855d800d55c", size = 149082 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/26/85536d6f3a00731b43ce3e3cb8f3dfcbd5e00634663ba3f8ee7a8fbefad8/ploston_core-1.2.0-py3-none-any.whl", hash = "sha256:d5807b553ebc1fe2e375894b336bb863761b0f2a1383808ba7e24a546998219b", size = 178028 },
 ]
-provides-extras = ["dev", "kafka", "tools"]
 
 [[package]]
 name = "pluggy"

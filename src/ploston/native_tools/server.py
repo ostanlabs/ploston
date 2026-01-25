@@ -18,7 +18,7 @@ import sys
 root_logger = logging.getLogger()
 root_logger.handlers.clear()
 stderr_handler = logging.StreamHandler(sys.stderr)
-stderr_handler.setFormatter(logging.Formatter('%(levelname)-8s [%(name)s] %(message)s'))
+stderr_handler.setFormatter(logging.Formatter("%(levelname)-8s [%(name)s] %(message)s"))
 root_logger.addHandler(stderr_handler)
 root_logger.setLevel(logging.DEBUG)
 
@@ -30,7 +30,7 @@ structlog.configure(
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(colors=False)
+        structlog.dev.ConsoleRenderer(colors=False),
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 # Reconfigure MCP library loggers to use stderr
-for logger_name in ['mcp', 'mcp.client', 'mcp.server', 'fastmcp']:
+for logger_name in ["mcp", "mcp.client", "mcp.server", "fastmcp"]:
     mcp_logger = logging.getLogger(logger_name)
     mcp_logger.handlers.clear()
     mcp_logger.addHandler(stderr_handler)
@@ -128,8 +128,14 @@ DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL", "all-minilm:lates
 
 # Log resolved configuration if in Docker
 if is_running_in_docker():
-    print(f"[Docker] Resolved FIRECRAWL_BASE_URL: {_firecrawl_base_url_raw} -> {FIRECRAWL_BASE_URL}", file=sys.stderr)
-    print(f"[Docker] Resolved KAFKA_BOOTSTRAP_SERVERS: {_kafka_servers_raw} -> {KAFKA_BOOTSTRAP_SERVERS}", file=sys.stderr)
+    print(
+        f"[Docker] Resolved FIRECRAWL_BASE_URL: {_firecrawl_base_url_raw} -> {FIRECRAWL_BASE_URL}",
+        file=sys.stderr,
+    )
+    print(
+        f"[Docker] Resolved KAFKA_BOOTSTRAP_SERVERS: {_kafka_servers_raw} -> {KAFKA_BOOTSTRAP_SERVERS}",
+        file=sys.stderr,
+    )
     print(f"[Docker] Resolved OLLAMA_HOST: {_ollama_host_raw} -> {OLLAMA_HOST}", file=sys.stderr)
 
 
@@ -137,18 +143,12 @@ if is_running_in_docker():
 # Filesystem Tools
 # =============================================================================
 
+
 @mcp.tool()
-def fs_read(
-    path: str,
-    encoding: str = "utf-8",
-    format: str = "text"
-) -> Dict[str, Any]:
+def fs_read(path: str, encoding: str = "utf-8", format: str = "text") -> Dict[str, Any]:
     """Read content from a file with format parsing."""
     return read_file_content(
-        path=path,
-        workspace_dir=WORKSPACE_DIR,
-        encoding=encoding,
-        format=format
+        path=path, workspace_dir=WORKSPACE_DIR, encoding=encoding, format=format
     )
 
 
@@ -159,7 +159,7 @@ def fs_write(
     format: str = "text",
     encoding: str = "utf-8",
     overwrite: bool = True,
-    create_dirs: bool = True
+    create_dirs: bool = True,
 ) -> Dict[str, Any]:
     """Write content to a file with format serialization."""
     return write_file_content(
@@ -169,7 +169,7 @@ def fs_write(
         format=format,
         encoding=encoding,
         overwrite=overwrite,
-        create_dirs=create_dirs
+        create_dirs=create_dirs,
     )
 
 
@@ -180,7 +180,7 @@ def fs_list(
     pattern: Optional[str] = None,
     include_files: bool = True,
     include_dirs: bool = True,
-    include_hidden: bool = False
+    include_hidden: bool = False,
 ) -> Dict[str, Any]:
     """List directory contents with filtering options."""
     return list_directory_content(
@@ -190,26 +190,20 @@ def fs_list(
         pattern=pattern,
         include_files=include_files,
         include_dirs=include_dirs,
-        include_hidden=include_hidden
+        include_hidden=include_hidden,
     )
 
 
 @mcp.tool()
-def fs_delete(
-    path: str,
-    recursive: bool = False
-) -> Dict[str, Any]:
+def fs_delete(path: str, recursive: bool = False) -> Dict[str, Any]:
     """Delete a file or directory."""
-    return delete_file_or_directory(
-        path=path,
-        workspace_dir=WORKSPACE_DIR,
-        recursive=recursive
-    )
+    return delete_file_or_directory(path=path, workspace_dir=WORKSPACE_DIR, recursive=recursive)
 
 
 # =============================================================================
 # Network Tools
 # =============================================================================
+
 
 @mcp.tool()
 async def http_request(
@@ -220,7 +214,7 @@ async def http_request(
     params: Optional[Dict[str, str]] = None,
     timeout: int = 30,
     max_retries: int = 3,
-    retry_delay: int = 1
+    retry_delay: int = 1,
 ) -> Dict[str, Any]:
     """Make HTTP requests with retry logic."""
     return await make_http_request(
@@ -231,35 +225,24 @@ async def http_request(
         params=params,
         timeout=timeout,
         max_retries=max_retries,
-        retry_delay=retry_delay
+        retry_delay=retry_delay,
     )
 
 
 @mcp.tool()
-async def network_ping(
-    host: str,
-    count: int = 4,
-    timeout: int = 5
-) -> Dict[str, Any]:
+async def network_ping(host: str, count: int = 4, timeout: int = 5) -> Dict[str, Any]:
     """Ping a host to check connectivity."""
     return await ping_host(host=host, count=count, timeout=timeout)
 
 
 @mcp.tool()
-async def network_dns_lookup(
-    hostname: str,
-    record_type: str = "A"
-) -> Dict[str, Any]:
+async def network_dns_lookup(hostname: str, record_type: str = "A") -> Dict[str, Any]:
     """Perform DNS lookup for a hostname."""
     return await dns_lookup(hostname=hostname, record_type=record_type)
 
 
 @mcp.tool()
-async def network_port_check(
-    host: str,
-    port: int,
-    timeout: int = 5
-) -> Dict[str, Any]:
+async def network_port_check(host: str, port: int, timeout: int = 5) -> Dict[str, Any]:
     """Check if a port is open on a host."""
     return await check_port(host=host, port=port, timeout=timeout)
 
@@ -268,51 +251,37 @@ async def network_port_check(
 # Data Transformation Tools
 # =============================================================================
 
+
 @mcp.tool()
-async def data_validate(
-    data: Any,
-    schema: Dict[str, Any]
-) -> Dict[str, Any]:
+async def data_validate(data: Any, schema: Dict[str, Any]) -> Dict[str, Any]:
     """Validate data against a JSON schema."""
     return await validate_data_schema(data=data, schema=schema)
 
 
 @mcp.tool()
-async def data_json_to_csv(
-    json_data: Any,
-    include_headers: bool = True
-) -> Dict[str, Any]:
+async def data_json_to_csv(json_data: Any, include_headers: bool = True) -> Dict[str, Any]:
     """Transform JSON data to CSV format."""
     return await transform_json_to_csv(json_data=json_data, include_headers=include_headers)
 
 
 @mcp.tool()
-async def data_csv_to_json(
-    csv_data: str,
-    has_headers: bool = True
-) -> Dict[str, Any]:
+async def data_csv_to_json(csv_data: str, has_headers: bool = True) -> Dict[str, Any]:
     """Transform CSV data to JSON format."""
     return await transform_csv_to_json(csv_data=csv_data, has_headers=has_headers)
 
 
 @mcp.tool()
 async def data_json_to_xml(
-    json_data: Any,
-    root_element: str = "root",
-    item_element: str = "item"
+    json_data: Any, root_element: str = "root", item_element: str = "item"
 ) -> Dict[str, Any]:
     """Transform JSON data to XML format."""
     return await transform_json_to_xml(
-        json_data=json_data,
-        root_element=root_element,
-        item_element=item_element
+        json_data=json_data, root_element=root_element, item_element=item_element
     )
 
 
 @mcp.tool()
-async def data_xml_to_json(
-    xml_data: str
-) -> Dict[str, Any]:
+async def data_xml_to_json(xml_data: str) -> Dict[str, Any]:
     """Transform XML data to JSON format."""
     return await transform_xml_to_json(xml_data=xml_data)
 
@@ -321,33 +290,25 @@ async def data_xml_to_json(
 # Extraction Tools
 # =============================================================================
 
+
 @mcp.tool()
-async def extract_text(
-    source: str,
-    extraction_type: str = "auto"
-) -> Dict[str, Any]:
+async def extract_text(source: str, extraction_type: str = "auto") -> Dict[str, Any]:
     """Extract text content from various sources."""
     return await extract_text_content(source=source, extraction_type=extraction_type)
 
 
 @mcp.tool()
 async def extract_structured(
-    source: str,
-    patterns: Dict[str, str],
-    extraction_type: str = "regex"
+    source: str, patterns: Dict[str, str], extraction_type: str = "regex"
 ) -> Dict[str, Any]:
     """Extract structured data using patterns."""
     return await extract_structured_data(
-        source=source,
-        patterns=patterns,
-        extraction_type=extraction_type
+        source=source, patterns=patterns, extraction_type=extraction_type
     )
 
 
 @mcp.tool()
-async def extract_file_metadata(
-    file_path: str
-) -> Dict[str, Any]:
+async def extract_file_metadata(file_path: str) -> Dict[str, Any]:
     """Extract metadata from files."""
     return await extract_metadata(file_path=file_path, workspace_dir=WORKSPACE_DIR)
 
@@ -356,12 +317,10 @@ async def extract_file_metadata(
 # Kafka Tools
 # =============================================================================
 
+
 @mcp.tool()
 async def kafka_publish(
-    topic: str,
-    message: Any,
-    key: Optional[str] = None,
-    timeout: int = 30
+    topic: str, message: Any, key: Optional[str] = None, timeout: int = 30
 ) -> Dict[str, Any]:
     """Publish a message to a Kafka topic."""
     return await publish_message_kafka(
@@ -374,14 +333,12 @@ async def kafka_publish(
         sasl_mechanism=KAFKA_SASL_MECHANISM,
         sasl_username=KAFKA_SASL_USERNAME,
         sasl_password=KAFKA_SASL_PASSWORD,
-        timeout=timeout
+        timeout=timeout,
     )
 
 
 @mcp.tool()
-async def kafka_list_topics(
-    timeout: int = 30
-) -> Dict[str, Any]:
+async def kafka_list_topics(timeout: int = 30) -> Dict[str, Any]:
     """List all Kafka topics."""
     return await list_topics_kafka(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -390,16 +347,13 @@ async def kafka_list_topics(
         sasl_mechanism=KAFKA_SASL_MECHANISM,
         sasl_username=KAFKA_SASL_USERNAME,
         sasl_password=KAFKA_SASL_PASSWORD,
-        timeout=timeout
+        timeout=timeout,
     )
 
 
 @mcp.tool()
 async def kafka_create_topic(
-    topic: str,
-    num_partitions: int = 1,
-    replication_factor: int = 1,
-    timeout: int = 30
+    topic: str, num_partitions: int = 1, replication_factor: int = 1, timeout: int = 30
 ) -> Dict[str, Any]:
     """Create a new Kafka topic."""
     return await create_topic_kafka(
@@ -412,16 +366,13 @@ async def kafka_create_topic(
         sasl_mechanism=KAFKA_SASL_MECHANISM,
         sasl_username=KAFKA_SASL_USERNAME,
         sasl_password=KAFKA_SASL_PASSWORD,
-        timeout=timeout
+        timeout=timeout,
     )
 
 
 @mcp.tool()
 async def kafka_consume(
-    topic: str,
-    group_id: str = "mcp-consumer",
-    max_messages: int = 10,
-    timeout: int = 30
+    topic: str, group_id: str = "mcp-consumer", max_messages: int = 10, timeout: int = 30
 ) -> Dict[str, Any]:
     """Consume messages from a Kafka topic."""
     return await consume_messages_kafka(
@@ -434,14 +385,12 @@ async def kafka_consume(
         sasl_mechanism=KAFKA_SASL_MECHANISM,
         sasl_username=KAFKA_SASL_USERNAME,
         sasl_password=KAFKA_SASL_PASSWORD,
-        timeout=timeout
+        timeout=timeout,
     )
 
 
 @mcp.tool()
-async def kafka_health(
-    timeout: int = 10
-) -> Dict[str, Any]:
+async def kafka_health(timeout: int = 10) -> Dict[str, Any]:
     """Check Kafka cluster health."""
     return await check_health_kafka(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -450,7 +399,7 @@ async def kafka_health(
         sasl_mechanism=KAFKA_SASL_MECHANISM,
         sasl_username=KAFKA_SASL_USERNAME,
         sasl_password=KAFKA_SASL_PASSWORD,
-        timeout=timeout
+        timeout=timeout,
     )
 
 
@@ -458,25 +407,18 @@ async def kafka_health(
 # ML Tools
 # =============================================================================
 
+
 @mcp.tool()
-async def ml_embed_text(
-    text: str,
-    model: Optional[str] = None
-) -> Dict[str, Any]:
+async def ml_embed_text(text: str, model: Optional[str] = None) -> Dict[str, Any]:
     """Generate text embeddings using Ollama."""
     return await generate_text_embedding(
-        text=text,
-        model=model or DEFAULT_EMBEDDING_MODEL,
-        ollama_host=OLLAMA_HOST
+        text=text, model=model or DEFAULT_EMBEDDING_MODEL, ollama_host=OLLAMA_HOST
     )
 
 
 @mcp.tool()
 async def ml_text_similarity(
-    text1: str,
-    text2: str,
-    method: str = "cosine",
-    model: Optional[str] = None
+    text1: str, text2: str, method: str = "cosine", model: Optional[str] = None
 ) -> Dict[str, Any]:
     """Calculate similarity between two texts."""
     return await calculate_text_similarity(
@@ -484,30 +426,25 @@ async def ml_text_similarity(
         text2=text2,
         method=method,
         model=model or DEFAULT_EMBEDDING_MODEL,
-        ollama_host=OLLAMA_HOST
+        ollama_host=OLLAMA_HOST,
     )
 
 
 @mcp.tool()
 async def ml_classify_text(
-    text: str,
-    categories: List[str],
-    model: Optional[str] = None
+    text: str, categories: List[str], model: Optional[str] = None
 ) -> Dict[str, Any]:
     """Classify text into predefined categories."""
     return await classify_text(
         text=text,
         categories=categories,
         model=model or DEFAULT_EMBEDDING_MODEL,
-        ollama_host=OLLAMA_HOST
+        ollama_host=OLLAMA_HOST,
     )
 
 
 @mcp.tool()
-async def ml_analyze_sentiment(
-    text: str,
-    method: str = "lexicon"
-) -> Dict[str, Any]:
+async def ml_analyze_sentiment(text: str, method: str = "lexicon") -> Dict[str, Any]:
     """Analyze sentiment of text."""
     return await analyze_sentiment(text=text, method=method)
 
@@ -516,13 +453,14 @@ async def ml_analyze_sentiment(
 # Firecrawl Tools
 # =============================================================================
 
+
 @mcp.tool()
 async def firecrawl_search(
     query: str,
     limit: int = 10,
     sources: List[str] = ["web"],
     include_domains: Optional[List[str]] = None,
-    exclude_domains: Optional[List[str]] = None
+    exclude_domains: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Search the web using Firecrawl."""
     return await search_web_firecrawl(
@@ -532,15 +470,13 @@ async def firecrawl_search(
         limit=limit,
         sources=sources,
         include_domains=include_domains or [],
-        exclude_domains=exclude_domains or []
+        exclude_domains=exclude_domains or [],
     )
 
 
 @mcp.tool()
 async def firecrawl_map(
-    url: str,
-    limit: int = 1000,
-    exclude_tags: Optional[List[str]] = None
+    url: str, limit: int = 1000, exclude_tags: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """Map a website to discover all URLs."""
     return await map_website_firecrawl(
@@ -548,15 +484,13 @@ async def firecrawl_map(
         base_url=FIRECRAWL_BASE_URL,
         api_key=FIRECRAWL_API_KEY,
         limit=limit,
-        exclude_tags=exclude_tags
+        exclude_tags=exclude_tags,
     )
 
 
 @mcp.tool()
 async def firecrawl_extract(
-    urls: List[str],
-    schema: Optional[Dict[str, Any]] = None,
-    prompt: Optional[str] = None
+    urls: List[str], schema: Optional[Dict[str, Any]] = None, prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """Extract structured data from URLs."""
     return await extract_data_firecrawl(
@@ -564,7 +498,7 @@ async def firecrawl_extract(
         base_url=FIRECRAWL_BASE_URL,
         api_key=FIRECRAWL_API_KEY,
         schema=schema,
-        prompt=prompt
+        prompt=prompt,
     )
 
 
