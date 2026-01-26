@@ -19,8 +19,30 @@ spec:
       containers:
         - name: native-tools
           image: 192.168.68.203:5000/native-tools:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
+          env:
+            # Redis configuration store
+            - name: REDIS_URL
+              value: "redis://ploston-redis:6379/0"
+            - name: REDIS_CONFIG_PREFIX
+              value: "ploston:config"
+            - name: REDIS_CONFIG_CHANNEL
+              value: "ploston:config:changed"
+            - name: REDIS_SERVICE_NAME
+              value: "native-tools"
+            # Fallback environment variables (resolved via ${VAR} in Redis config)
+            - name: FIRECRAWL_BASE_URL
+              value: "http://firecrawl:3002"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-0.kafka.ploston.svc.cluster.local:9093"
+            - name: OLLAMA_HOST
+              value: "http://ollama:11434"
+          envFrom:
+            - secretRef:
+                name: ploston-secrets
+                optional: true
           resources:
             limits:
               cpu: "500m"

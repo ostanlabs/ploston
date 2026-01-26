@@ -10,17 +10,52 @@
 
 services:
   # ---------------------------------------------------------------------------
+  # Redis - Centralized Configuration Store
+  # ---------------------------------------------------------------------------
+  # Stores configuration for ploston and native-tools with pub/sub notifications
+  redis:
+    image: redis:7-alpine
+    container_name: ploston-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # ---------------------------------------------------------------------------
   # Ploston - Agent Execution Layer
   # ---------------------------------------------------------------------------
   # Main MCP server with workflow engine and tool orchestration
   ploston:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../../..
+      dockerfile: docker/ploston/Dockerfile
     image: ploston:latest
     container_name: ploston
 
     depends_on:
+      redis:
+        condition: service_healthy
       native-tools:
         condition: service_healthy
 
@@ -29,6 +64,11 @@ services:
       - AEL_HOST=0.0.0.0
       - AEL_PORT=8080
       - AEL_TRANSPORT=http
+
+      # Redis configuration store
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_CONFIG_PREFIX=ploston:config
+      - REDIS_CONFIG_CHANNEL=ploston:config:changed
 
       # Telemetry configuration
       - AEL_TELEMETRY_ENABLED=true
@@ -80,17 +120,28 @@ services:
   # ---------------------------------------------------------------------------
   native-tools:
     build:
-      context: .
+      context: ../../../..
       dockerfile: docker/native-tools/Dockerfile
     image: native-tools:latest
     container_name: native-tools
+
+    depends_on:
+      redis:
+        condition: service_healthy
 
     environment:
       # Server configuration
       - NATIVE_TOOLS_HOST=0.0.0.0
       - NATIVE_TOOLS_PORT=8081
 
-      # Optional external services (configure as needed)
+      # Redis configuration store
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_CONFIG_PREFIX=ploston:config
+      - REDIS_CONFIG_CHANNEL=ploston:config:changed
+      - REDIS_SERVICE_NAME=native-tools
+
+      # Fallback environment variables (used if Redis config not available)
+      # These are resolved via ${VAR} syntax in Redis config
       - FIRECRAWL_BASE_URL=${FIRECRAWL_BASE_URL:-}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-}
@@ -127,6 +178,8 @@ services:
 # -----------------------------------------------------------------------------
 volumes:
   native-tools-data:
+    driver: local
+  redis-data:
     driver: local
 
 # -----------------------------------------------------------------------------
