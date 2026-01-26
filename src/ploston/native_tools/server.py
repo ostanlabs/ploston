@@ -39,7 +39,6 @@ structlog.configure(
 )
 
 # Now safe to import other modules
-import os
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
@@ -94,8 +93,6 @@ from ploston_core.native_tools import (
 # Import Docker utilities
 from ploston_core.native_tools.utils import (
     is_running_in_docker,
-    resolve_kafka_servers_for_docker,
-    resolve_url_for_docker,
 )
 
 # Import config manager for reactive config updates
@@ -147,7 +144,7 @@ def _update_config_globals(new_config: ToolConfig) -> None:
     OLLAMA_HOST = new_config.ollama_host
     DEFAULT_EMBEDDING_MODEL = new_config.default_embedding_model
 
-    print(f"[Config] Updated configuration from Redis", file=sys.stderr)
+    print("[Config] Updated configuration from Redis", file=sys.stderr)
 
 
 # Register callback for config changes
@@ -552,7 +549,6 @@ async def health_check() -> Dict[str, Any]:
 
 async def start_with_redis() -> None:
     """Start the server with Redis config watcher."""
-    import asyncio
 
     config_manager = get_config_manager()
 
