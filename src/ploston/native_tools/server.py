@@ -98,45 +98,66 @@ from ploston_core.native_tools.utils import (
     resolve_url_for_docker,
 )
 
+# Import config manager for reactive config updates
+from .config_manager import ToolConfig, get_config, get_config_manager
+
 # Initialize FastMCP server
 mcp = FastMCP("native-tools")
 
 # =============================================================================
-# Configuration from environment
+# Configuration - uses ConfigManager for reactive updates from Redis
 # =============================================================================
 
-WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", os.getcwd())
+# Get initial config from environment (ConfigManager handles this)
+_cfg = get_config()
 
-# Firecrawl configuration
-_firecrawl_base_url_raw = os.getenv("FIRECRAWL_BASE_URL", "http://localhost:3002")
-FIRECRAWL_BASE_URL = resolve_url_for_docker(_firecrawl_base_url_raw)
-FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
+# These are accessed by tools - they get updated when config changes
+WORKSPACE_DIR = _cfg.workspace_dir
+FIRECRAWL_BASE_URL = _cfg.firecrawl_base_url
+FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
+KAFKA_BOOTSTRAP_SERVERS = _cfg.kafka_bootstrap_servers
+KAFKA_CLIENT_ID = _cfg.kafka_client_id
+KAFKA_SECURITY_PROTOCOL = _cfg.kafka_security_protocol
+KAFKA_SASL_MECHANISM = _cfg.kafka_sasl_mechanism
+KAFKA_SASL_USERNAME = _cfg.kafka_sasl_username
+KAFKA_SASL_PASSWORD = _cfg.kafka_sasl_password
+OLLAMA_HOST = _cfg.ollama_host
+DEFAULT_EMBEDDING_MODEL = _cfg.default_embedding_model
 
-# Kafka configuration
-_kafka_servers_raw = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-KAFKA_BOOTSTRAP_SERVERS = resolve_kafka_servers_for_docker(_kafka_servers_raw)
-KAFKA_CLIENT_ID = os.getenv("KAFKA_CLIENT_ID", "mcp-native-tools")
-KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
-KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM")
-KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME")
-KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD")
 
-# ML configuration
-_ollama_host_raw = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_HOST = resolve_url_for_docker(_ollama_host_raw)
-DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL", "all-minilm:latest")
+def _update_config_globals(new_config: ToolConfig) -> None:
+    """Update global config variables when config changes.
+
+    This is called by the ConfigManager when Redis publishes new config.
+    """
+    global WORKSPACE_DIR, FIRECRAWL_BASE_URL, FIRECRAWL_API_KEY
+    global KAFKA_BOOTSTRAP_SERVERS, KAFKA_CLIENT_ID, KAFKA_SECURITY_PROTOCOL
+    global KAFKA_SASL_MECHANISM, KAFKA_SASL_USERNAME, KAFKA_SASL_PASSWORD
+    global OLLAMA_HOST, DEFAULT_EMBEDDING_MODEL
+
+    WORKSPACE_DIR = new_config.workspace_dir
+    FIRECRAWL_BASE_URL = new_config.firecrawl_base_url
+    FIRECRAWL_API_KEY = new_config.firecrawl_api_key
+    KAFKA_BOOTSTRAP_SERVERS = new_config.kafka_bootstrap_servers
+    KAFKA_CLIENT_ID = new_config.kafka_client_id
+    KAFKA_SECURITY_PROTOCOL = new_config.kafka_security_protocol
+    KAFKA_SASL_MECHANISM = new_config.kafka_sasl_mechanism
+    KAFKA_SASL_USERNAME = new_config.kafka_sasl_username
+    KAFKA_SASL_PASSWORD = new_config.kafka_sasl_password
+    OLLAMA_HOST = new_config.ollama_host
+    DEFAULT_EMBEDDING_MODEL = new_config.default_embedding_model
+
+    print(f"[Config] Updated configuration from Redis", file=sys.stderr)
+
+
+# Register callback for config changes
+get_config_manager().on_change(_update_config_globals)
 
 # Log resolved configuration if in Docker
 if is_running_in_docker():
-    print(
-        f"[Docker] Resolved FIRECRAWL_BASE_URL: {_firecrawl_base_url_raw} -> {FIRECRAWL_BASE_URL}",
-        file=sys.stderr,
-    )
-    print(
-        f"[Docker] Resolved KAFKA_BOOTSTRAP_SERVERS: {_kafka_servers_raw} -> {KAFKA_BOOTSTRAP_SERVERS}",
-        file=sys.stderr,
-    )
-    print(f"[Docker] Resolved OLLAMA_HOST: {_ollama_host_raw} -> {OLLAMA_HOST}", file=sys.stderr)
+    print(f"[Docker] FIRECRAWL_BASE_URL: {FIRECRAWL_BASE_URL}", file=sys.stderr)
+    print(f"[Docker] KAFKA_BOOTSTRAP_SERVERS: {KAFKA_BOOTSTRAP_SERVERS}", file=sys.stderr)
+    print(f"[Docker] OLLAMA_HOST: {OLLAMA_HOST}", file=sys.stderr)
 
 
 # =============================================================================
@@ -509,9 +530,51 @@ async def firecrawl_health() -> Dict[str, Any]:
 
 
 # =============================================================================
+# Health check endpoint
+# =============================================================================
+
+
+@mcp.tool()
+async def health_check() -> Dict[str, Any]:
+    """Check native-tools health status including Redis connection."""
+    config_manager = get_config_manager()
+    return {
+        "status": "healthy",
+        "service": "native-tools",
+        **config_manager.get_health_status(),
+    }
+
+
+# =============================================================================
 # Main entry point
 # =============================================================================
 
+
+async def start_with_redis() -> None:
+    """Start the server with Redis config watcher."""
+    import asyncio
+
+    config_manager = get_config_manager()
+
+    # Try to start Redis watcher (non-blocking if Redis not available)
+    redis_started = await config_manager.start_redis_watcher()
+    if redis_started:
+        print("[Startup] Redis config watcher started", file=sys.stderr)
+    else:
+        print("[Startup] Running without Redis config watcher", file=sys.stderr)
+
+    # Run the MCP server
+    # Note: FastMCP's run() is blocking, so we can't easily integrate async
+    # For now, the Redis watcher runs in the background via asyncio tasks
+
+
 if __name__ == "__main__":
+    import asyncio
+
+    # Start Redis watcher before running MCP server
+    asyncio.get_event_loop().run_until_complete(
+        get_config_manager().start_redis_watcher()
+    )
+
     # Run in HTTP mode by default for Docker deployment
     mcp.run(transport="http", host="0.0.0.0", port=8081)
