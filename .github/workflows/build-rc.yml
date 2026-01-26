@@ -10,13 +10,20 @@
 #
 # Triggered by:
 #   - CI workflow completing successfully on main (workflow_run)
+#   - ploston-core CI passing (repository_dispatch: core-updated)
 #   - Manual workflow dispatch
 #
-# Flow:
+# Flow (ploston change):
 #   1. Push to main triggers CI workflow
 #   2. CI runs lint, unit tests, integration tests, etc.
 #   3. If CI passes, this workflow runs automatically
 #   4. Builds RC image and triggers meta-repo E2E tests
+#
+# Flow (ploston-core change):
+#   1. Push to ploston-core/main triggers its CI
+#   2. ploston-core CI passes → triggers this workflow via repository_dispatch
+#   3. Builds RC image with the new ploston-core version
+#   4. Triggers meta-repo E2E tests
 #
 # Note: This workflow runs in the ploston package repo, but the Dockerfile
 # lives in the meta-repo. We need to checkout the meta-repo to build.
@@ -30,6 +37,11 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+
+  # Trigger when ploston-core updates (cascading build)
+  repository_dispatch:
+    types: [core-updated]
+
   workflow_dispatch:
     inputs:
       skip_trigger:
@@ -37,6 +49,10 @@ on:
         required: false
         default: 'false'
         type: boolean
+      core_sha:
+        description: 'Optional: specific ploston-core SHA to use'
+        required: false
+        type: string
 
 env:
   REGISTRY: docker.io
@@ -49,8 +65,11 @@ jobs:
   build-rc:
     name: Build RC Image
     runs-on: ubuntu-latest
-    # Only run if CI succeeded (or if manually triggered)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Run if: CI succeeded, or repository_dispatch (core-updated), or manual trigger
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
       packages: write
@@ -59,35 +78,99 @@ jobs:
       image_tag: ${{ steps.meta.outputs.tags }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
       sha: ${{ steps.sha.outputs.sha }}
+      core_sha: ${{ steps.core.outputs.sha }}
+      triggered_by: ${{ steps.trigger.outputs.source }}
 
     steps:
+      - name: Determine trigger source
+        id: trigger
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "source=ploston-core" >> $GITHUB_OUTPUT
+            echo "Triggered by ploston-core update"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "source=ploston" >> $GITHUB_OUTPUT
+            echo "Triggered by ploston CI"
+          else
+            echo "source=manual" >> $GITHUB_OUTPUT
+            echo "Triggered manually"
+          fi
+
       - name: Checkout meta-repo (contains Dockerfile)
         uses: actions/checkout@v4
         with:
           repository: ostanlabs/agent-execution-layer
           submodules: recursive
           token: ${{ secrets.META_REPO_TOKEN }}
-      
-      - name: Determine commit SHA
+
+      - name: Determine ploston commit SHA
         id: sha
         run: |
-          # Use workflow_run head_sha if triggered by CI, otherwise use github.sha
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          # For repository_dispatch (core-updated), use latest ploston main
+          # For workflow_run, use the triggering commit
+          # For manual, use github.sha or latest main
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            # Core update - use latest ploston main
+            cd packages/ploston
+            git fetch origin main
+            SHA=$(git rev-parse origin/main)
+            cd ../..
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
             SHA="${{ github.event.workflow_run.head_sha }}"
           else
             SHA="${{ github.sha }}"
           fi
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "short_sha=$(echo $SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-          echo "Using commit SHA: $SHA"
+          echo "Using ploston commit SHA: $SHA"
 
-      - name: Update ploston submodule to triggering commit
+      - name: Determine ploston-core commit SHA
+        id: core
+        run: |
+          # For repository_dispatch, use the core_sha from payload
+          # For manual with core_sha input, use that
+          # Otherwise, use whatever is in the submodule
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            CORE_SHA="${{ github.event.client_payload.core_sha }}"
+          elif [ -n "${{ github.event.inputs.core_sha }}" ]; then
+            CORE_SHA="${{ github.event.inputs.core_sha }}"
+          else
+            # Use current submodule pointer
+            cd packages/ploston-core
+            CORE_SHA=$(git rev-parse HEAD)
+            cd ../..
+          fi
+          echo "sha=$CORE_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo $CORE_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "Using ploston-core commit SHA: $CORE_SHA"
+
+      - name: Update ploston submodule to target commit
         run: |
           cd packages/ploston
           git fetch origin ${{ steps.sha.outputs.sha }}
           git checkout ${{ steps.sha.outputs.sha }}
           cd ../..
           echo "Updated ploston to commit ${{ steps.sha.outputs.sha }}"
+
+      - name: Update ploston-core submodule to target commit
+        if: github.event_name == 'repository_dispatch' || github.event.inputs.core_sha != ''
+        run: |
+          cd packages/ploston-core
+          git fetch origin ${{ steps.core.outputs.sha }}
+          git checkout ${{ steps.core.outputs.sha }}
+          cd ../..
+          echo "Updated ploston-core to commit ${{ steps.core.outputs.sha }}"
+
+      - name: Verify versions
+        run: |
+          echo "## Build Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Commit |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ploston | \`${{ steps.sha.outputs.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ploston-core | \`${{ steps.core.outputs.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ steps.trigger.outputs.source }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Set variables
         id: vars
@@ -147,7 +230,7 @@ jobs:
     needs: build-rc
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.skip_trigger != 'true' }}
-    
+
     steps:
       - name: Trigger meta-repo test-rc workflow
         uses: peter-evans/repository-dispatch@v2
@@ -160,6 +243,8 @@ jobs:
               "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc-${{ needs.build-rc.outputs.short_sha }}",
               "sha": "${{ needs.build-rc.outputs.sha }}",
               "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
+              "core_sha": "${{ needs.build-rc.outputs.core_sha }}",
+              "triggered_by": "${{ needs.build-rc.outputs.triggered_by }}",
               "ref": "${{ github.ref }}",
               "actor": "${{ github.actor }}"
             }
