@@ -1,17 +1,18 @@
 """
-CLI Integration Tests for Ploston.
+CLI Integration Tests for Ploston (Local Tests Only).
 
-Test IDs: CLI-001 to CLI-020
+Test IDs: CLI-005 to CLI-009, CLI-015 (local), CLI-016 to CLI-020
 Priority: P1
 
-These tests verify the CLI functionality:
-- ploston serve
-- ploston run
+These tests verify CLI functionality that does NOT require a running server:
 - ploston validate
-- ploston workflows list/show
-- ploston tools list/show/refresh
-- ploston config show
-- ploston version
+- ploston config show --local
+- ploston --help / --version
+- Error handling
+
+NOTE: Tests that require a running server (CLI-003, CLI-004, CLI-010 to CLI-014,
+CLI-015 server, and integration scenarios) have been moved to the meta-repo:
+agent-execution-layer/tests/integration/test_cli_integration.py
 
 Prerequisites:
 - Component 12 (CLI) must be implemented
@@ -199,57 +200,11 @@ class TestAelServe:
 
 
 class TestAelRun:
-    """Tests for 'ael run' command (CLI-003 to CLI-006)."""
+    """Tests for 'ael run' command (CLI-005 to CLI-006).
 
-    @pytest.mark.requires_server
-    def test_cli_003_run_workflow(
-        self,
-        cli_runner: Callable,
-        test_config_path: str,
-    ):
-        """
-        CLI-003: Verify 'ael run <workflow>' executes workflow.
-        Uses 'fetch-url' workflow from server.
-
-        NOTE: Requires a running Ploston server at localhost:8080.
-        """
-        # Use workflow ID from registry (loaded from server)
-        result = cli_runner(
-            "run",
-            "fetch-url",
-            "--input",
-            "url=https://example.com",
-        )
-
-        # Should execute without error
-        assert result.returncode == 0, f"stderr: {result.stderr}"
-
-    @pytest.mark.requires_server
-    def test_cli_004_run_with_inputs(
-        self,
-        cli_runner: Callable,
-        test_config_path: str,
-    ):
-        """
-        CLI-004: Verify 'ael run --input key=value' passes inputs.
-        Uses 'fetch-url' workflow from server.
-
-        NOTE: Requires a running Ploston server at localhost:8080.
-        """
-        result = cli_runner(
-            "run",
-            "fetch-url",
-            "--input",
-            "url=https://test.example.com",
-        )
-
-        assert result.returncode == 0, f"stderr: {result.stderr}"
-        # Output should contain success status
-        assert (
-            "completed" in result.stdout.lower()
-            or "success" in result.stdout.lower()
-            or result.returncode == 0
-        )
+    NOTE: Tests CLI-003 and CLI-004 require a running server and have been
+    moved to the meta-repo (agent-execution-layer/tests/integration/test_cli_integration.py).
+    """
 
     def test_cli_005_run_missing_workflow(self, cli_runner: Callable):
         """
@@ -368,85 +323,16 @@ steps:
 
 # =============================================================================
 # Workflows Command Tests (CLI-010 to CLI-011)
+# NOTE: These tests require a running server and have been moved to the
+# meta-repo (agent-execution-layer/tests/integration/test_cli_integration.py).
 # =============================================================================
-
-
-@pytest.mark.requires_server
-class TestAelWorkflows:
-    """Tests for 'ael workflows' commands (CLI-010 to CLI-011).
-
-    NOTE: These tests require a running Ploston server at localhost:8080.
-    """
-
-    def test_cli_010_workflows_list(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-010: Verify 'ael workflows list' shows workflows.
-        """
-        result = cli_runner("workflows", "list")
-
-        # Command should work (even if no workflows)
-        assert result.returncode == 0 or "no workflows" in result.stdout.lower()
-
-    def test_cli_011_workflows_show(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-011: Verify 'ael workflows show <id>' shows details.
-        """
-        # Try to show a workflow (may not exist)
-        result = cli_runner("workflows", "show", "nonexistent-workflow")
-
-        # Should either show workflow or give helpful error
-        output = result.stdout.lower() + result.stderr.lower()
-        # Accept either success or "not found" error
-        assert result.returncode == 0 or "not found" in output or "error" in output
 
 
 # =============================================================================
 # Tools Command Tests (CLI-012 to CLI-014)
+# NOTE: These tests require a running server and have been moved to the
+# meta-repo (agent-execution-layer/tests/integration/test_cli_integration.py).
 # =============================================================================
-
-
-@pytest.mark.requires_server
-class TestAelTools:
-    """Tests for 'ploston tools' commands (CLI-012 to CLI-014).
-
-    NOTE: These tests require a running Ploston server at localhost:8080.
-    """
-
-    def test_cli_012_tools_list(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-012: Verify 'ploston tools list' shows available tools.
-        """
-        result = cli_runner("tools", "list")
-
-        # Command should work
-        assert result.returncode == 0 or "error" not in result.stderr.lower()
-
-        # python_exec should be present (system tool)
-        if result.returncode == 0:
-            assert "python_exec" in result.stdout.lower() or "python" in result.stdout.lower()
-
-    def test_cli_013_tools_show(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-013: Verify 'ploston tools show <name>' shows tool details.
-        """
-        # Try to show python_exec (should always exist)
-        result = cli_runner("tools", "show", "python_exec")
-
-        # Should show tool or give helpful error
-        output = result.stdout.lower() + result.stderr.lower()
-        if result.returncode == 0:
-            # Should have tool info
-            assert "python" in output or "exec" in output or "code" in output
-
-    def test_cli_014_tools_refresh(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-014: Verify 'ploston tools refresh' refreshes tool cache.
-        """
-        result = cli_runner("tools", "refresh")
-
-        # Should work or indicate no servers to refresh
-        output = result.stdout.lower() + result.stderr.lower()
-        assert result.returncode == 0 or "refresh" in output or "no" in output
 
 
 # =============================================================================
@@ -455,7 +341,11 @@ class TestAelTools:
 
 
 class TestAelConfig:
-    """Tests for 'ploston config' commands (CLI-015)."""
+    """Tests for 'ploston config' commands (CLI-015).
+
+    NOTE: test_cli_015_config_show_server requires a running server and has been
+    moved to the meta-repo (agent-execution-layer/tests/integration/test_cli_integration.py).
+    """
 
     def test_cli_015_config_show_local(self, cli_runner: Callable, test_config_path: str):
         """
@@ -466,18 +356,6 @@ class TestAelConfig:
         result = cli_runner("config", "show", "--local")
 
         # Should show local config (even if default)
-        assert result.returncode == 0 or "config" in result.stdout.lower()
-
-    @pytest.mark.requires_server
-    def test_cli_015_config_show_server(self, cli_runner: Callable, test_config_path: str):
-        """
-        CLI-015: Verify 'ploston config show' displays server configuration.
-
-        NOTE: Requires a running Ploston server at localhost:8080.
-        """
-        result = cli_runner("config", "show")
-
-        # Should show config (even if default)
         assert result.returncode == 0 or "config" in result.stdout.lower()
 
 
@@ -593,64 +471,6 @@ class TestSubcommandHelp:
 
 # =============================================================================
 # Integration Scenarios
+# NOTE: These tests require a running server and have been moved to the
+# meta-repo (agent-execution-layer/tests/integration/test_cli_integration.py).
 # =============================================================================
-
-
-@pytest.mark.requires_server
-class TestCLIIntegrationScenarios:
-    """End-to-end CLI scenarios.
-
-    NOTE: These tests require a running Ploston server at localhost:8080.
-    """
-
-    def test_full_workflow_lifecycle(
-        self,
-        cli_runner: Callable,
-        temp_workflow_file: Callable,
-        valid_workflow_yaml: str,
-        test_config_path: str,
-    ):
-        """Test complete workflow lifecycle: validate -> run."""
-        workflow_path = temp_workflow_file(valid_workflow_yaml)
-
-        # Step 1: Validate (local, doesn't need server)
-        validate_result = cli_runner("validate", str(workflow_path))
-        assert validate_result.returncode == 0, f"Validation failed: {validate_result.stderr}"
-
-        # Step 2: Run a workflow from the registry (requires server)
-        # The 'run' command expects a workflow ID from the registry, not a file path
-        run_result = cli_runner(
-            "run",
-            "fetch-url",
-            "--input",
-            "url=https://lifecycle-test.example.com",
-        )
-        assert run_result.returncode == 0, f"Run failed: {run_result.stderr}"
-
-    def test_tools_workflow(self, cli_runner: Callable, test_config_path: str):
-        """Test tools discovery workflow."""
-        # Step 1: List tools
-        list_result = cli_runner("tools", "list")
-
-        # Step 2: If tools exist, try to show one
-        if list_result.returncode == 0 and "python_exec" in list_result.stdout:
-            show_result = cli_runner("tools", "show", "python_exec")
-            # Should work
-            assert show_result.returncode == 0 or "python" in show_result.stdout.lower()
-
-    def test_run_workflow_lifecycle(
-        self,
-        cli_runner: Callable,
-        test_config_path: str,
-    ):
-        """Test workflow run lifecycle (without validate).
-        Uses 'fetch-url' workflow from server.
-        """
-        # Run the workflow using workflow ID from registry
-        run_result = cli_runner(
-            "run",
-            "fetch-url",
-            "--input",
-            "url=https://lifecycle-test.example.com",
-        )
-        assert run_result.returncode == 0, f"Run failed: {run_result.stderr}"

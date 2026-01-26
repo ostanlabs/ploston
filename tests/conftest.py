@@ -159,6 +159,10 @@ def pytest_configure(config):
         "markers",
         "requires_running_mode: Tests that require AEL to be in running mode (not configuration mode)",
     )
+    config.addinivalue_line(
+        "markers",
+        "requires_server: Tests that require a running Ploston server (skipped in CI without server)",
+    )
 
 
 def pytest_addoption(parser):
