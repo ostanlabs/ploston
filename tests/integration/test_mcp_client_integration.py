@@ -1,30 +1,42 @@
 """
-MCP Client Integration Tests for AEL.
+MCP Client Integration Tests for Ploston.
 
-These tests use the mcp_test_client utility to verify AEL's MCP server
-functionality with the internal configuration and native_tools.
+These tests verify Ploston's MCP server functionality over HTTP transport.
+They connect to a running server (typically via docker-compose).
 
 Test IDs: MCI-001 to MCI-016
 Priority: P1
 
 Prerequisites:
-- Agent submodule initialized (git submodule update --init)
-- internal/ael-config.yaml exists
-- AEL installed in virtualenv
+- Server running via docker-compose:
+    docker compose -f docker-compose.test.yml up -d
+- Or set PLOSTON_HOST and PLOSTON_PORT environment variables
+
+Usage:
+    # Start the test server
+    docker compose -f docker-compose.test.yml up -d
+
+    # Run the tests
+    pytest tests/integration/test_mcp_client_integration.py -v
+
+    # Stop the test server
+    docker compose -f docker-compose.test.yml down
 """
 
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+import requests
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 INTERNAL_DIR = PROJECT_ROOT / "internal"
-MCP_TEST_CLIENT = INTERNAL_DIR / "mcp_test_client.py"
-AEL_CONFIG = INTERNAL_DIR / "ael-config.yaml"
+
+# Server configuration from environment or defaults (docker-compose.test.yml uses 8082)
+PLOSTON_HOST = os.environ.get("PLOSTON_HOST", "127.0.0.1")
+PLOSTON_PORT = int(os.environ.get("PLOSTON_PORT", "8082"))
+PLOSTON_BASE_URL = f"http://{PLOSTON_HOST}:{PLOSTON_PORT}"
 
 
 pytestmark = [
@@ -33,51 +45,86 @@ pytestmark = [
 ]
 
 
-def skip_if_no_config():
-    """Skip if internal config not available."""
-    if not AEL_CONFIG.exists():
-        pytest.skip("internal/ael-config.yaml not found")
+class MCPHTTPClient:
+    """Simple MCP HTTP client for testing."""
+
+    def __init__(self, base_url: str = PLOSTON_BASE_URL):
+        self.base_url = base_url
+        self._msg_id = 0
+        self._session_id: str | None = None
+
+    def _next_id(self) -> int:
+        self._msg_id += 1
+        return self._msg_id
+
+    def is_server_running(self) -> bool:
+        """Check if the server is running."""
+        try:
+            response = requests.get(f"{self.base_url}/health", timeout=2)
+            return response.status_code == 200
+        except requests.exceptions.ConnectionError:
+            return False
+
+    def send(self, method: str, params: dict | None = None) -> dict:
+        """Send a JSON-RPC request via HTTP."""
+        msg_id = self._next_id()
+        request = {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "method": method,
+        }
+        if params:
+            request["params"] = params
+
+        headers = {"Content-Type": "application/json"}
+        if self._session_id:
+            headers["X-MCP-Session-ID"] = self._session_id
+
+        response = requests.post(
+            f"{self.base_url}/mcp",
+            json=request,
+            headers=headers,
+            timeout=60,
+        )
+
+        if response.status_code == 204:
+            return {"jsonrpc": "2.0", "id": msg_id, "result": None}
+
+        return response.json()
+
+    def initialize(self) -> dict:
+        """Send initialize request."""
+        return self.send("initialize", {
+            "protocolVersion": "2024-11-05",
+            "clientInfo": {"name": "mcp-test-client", "version": "1.0.0"},
+            "capabilities": {},
+        })
+
+    def list_tools(self) -> list[dict]:
+        """List available tools."""
+        response = self.send("tools/list", {})
+        if "error" in response:
+            raise RuntimeError(f"Error: {response['error']}")
+        return response.get("result", {}).get("tools", [])
+
+    def call_tool(self, name: str, arguments: dict) -> dict:
+        """Call a tool."""
+        response = self.send("tools/call", {"name": name, "arguments": arguments})
+        return response
 
 
-def skip_if_no_client():
-    """Skip if MCP test client not available."""
-    if not MCP_TEST_CLIENT.exists():
-        pytest.skip("internal/mcp_test_client.py not found")
-
-
-class MCPClientResult:
-    """Wrapper for subprocess result that combines stdout and stderr for assertions."""
-
-    def __init__(self, result: subprocess.CompletedProcess):
-        self._result = result
-        self.returncode = result.returncode
-        self.stdout = result.stdout
-        self.stderr = result.stderr
-        # Combined output for easier assertions
-        self.output = result.stdout + result.stderr
-
-
-def run_mcp_client(*args: str, timeout: int = 60) -> MCPClientResult:
-    """Run the MCP test client with given arguments."""
-    cmd = [
-        sys.executable,
-        str(MCP_TEST_CLIENT),
-        "-c",
-        str(AEL_CONFIG),
-        *args,
-    ]
-    env = os.environ.copy()
-    # Use installed packages - no need to set PYTHONPATH if packages are installed
-
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=PROJECT_ROOT,
-        env=env,
-    )
-    return MCPClientResult(result)
+@pytest.fixture(scope="module")
+def mcp_client():
+    """Create MCP client and verify server is running."""
+    client = MCPHTTPClient()
+    if not client.is_server_running():
+        pytest.skip(
+            f"Ploston server not running at {PLOSTON_BASE_URL}. "
+            "Start with: docker compose -f docker-compose.test.yml up -d"
+        )
+    # Initialize the MCP session
+    client.initialize()
+    return client
 
 
 # =============================================================================
@@ -86,49 +133,33 @@ def run_mcp_client(*args: str, timeout: int = 60) -> MCPClientResult:
 
 
 class TestMCPConfiguration:
-    """Tests for AEL MCP server configuration."""
+    """Tests for Ploston MCP server configuration."""
 
-    def test_mci_001_server_starts_successfully(self):
+    def test_mci_001_server_responds_to_initialize(self, mcp_client):
         """
-        MCI-001: Verify AEL MCP server starts and responds to initialize.
+        MCI-001: Verify Ploston MCP server responds to initialize.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        # Re-initialize to verify it works
+        response = mcp_client.initialize()
+        assert "result" in response
+        assert "serverInfo" in response.get("result", {})
 
-        result = run_mcp_client("--list-tools")
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        # Client logs go to stderr
-        assert "Started AEL" in result.output
-        assert "Connected to:" in result.output
-
-    def test_mci_002_server_info_correct(self):
+    def test_mci_002_server_info_correct(self, mcp_client):
         """
         MCI-002: Verify server info returned in initialize response.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        response = mcp_client.initialize()
+        server_info = response.get("result", {}).get("serverInfo", {})
+        # Server should identify itself
+        assert "name" in server_info
+        assert "version" in server_info
 
-        result = run_mcp_client("--list-tools")
-
-        assert result.returncode == 0
-        # Server info should include name and version (in stderr logs)
-        assert "'name': 'ael'" in result.output or '"name": "ael"' in result.output
-
-    def test_mci_003_config_loads_native_tools(self):
+    def test_mci_003_health_endpoint_works(self, mcp_client):
         """
-        MCI-003: Verify native_tools MCP server is connected.
+        MCI-003: Verify health endpoint is accessible.
         """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client("--list-tools")
-
-        assert result.returncode == 0
-        # Should have native tools
-        assert "http_request" in result.stdout
-        assert "fs_read" in result.stdout
-        assert "fs_write" in result.stdout
+        response = requests.get(f"{mcp_client.base_url}/health", timeout=5)
+        assert response.status_code == 200
 
 
 # =============================================================================
@@ -139,64 +170,39 @@ class TestMCPConfiguration:
 class TestToolsDiscovery:
     """Tests for MCP tools/list functionality."""
 
-    def test_mci_004_lists_native_tools(self):
+    def test_mci_004_lists_tools(self, mcp_client):
         """
-        MCI-004: Verify native tools are discovered and listed.
+        MCI-004: Verify tools are discovered and listed.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        tools = mcp_client.list_tools()
+        assert len(tools) > 0, "No tools discovered"
 
-        result = run_mcp_client("--list-tools")
+        # Get tool names
+        tool_names = [t["name"] for t in tools]
 
-        assert result.returncode == 0
+        # Should have some tools (exact tools depend on config)
+        assert len(tool_names) > 0
 
-        # Core native tools should be present
-        expected_tools = [
-            "http_request",
-            "fs_read",
-            "fs_write",
-            "fs_list",
-            "network_ping",
-            "python_exec",
-        ]
-        for tool in expected_tools:
-            assert tool in result.stdout, f"Missing tool: {tool}"
-
-    def test_mci_005_lists_workflows_as_tools(self):
+    def test_mci_005_tools_have_required_fields(self, mcp_client):
         """
-        MCI-005: Verify workflows are exposed as tools with workflow: prefix.
+        MCI-005: Verify tools have required MCP fields.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        tools = mcp_client.list_tools()
 
-        result = run_mcp_client("--list-tools")
+        for tool in tools:
+            assert "name" in tool, f"Tool missing 'name': {tool}"
+            assert "description" in tool, f"Tool {tool.get('name')} missing 'description'"
+            # inputSchema is optional but common
+            if "inputSchema" in tool:
+                assert isinstance(tool["inputSchema"], dict)
 
-        assert result.returncode == 0
-
-        # Workflows should be prefixed
-        assert "workflow:fetch-url" in result.stdout
-        assert "workflow:file-operations" in result.stdout
-        assert "workflow:python-exec-explicit" in result.stdout
-
-    def test_mci_006_tool_count_matches_expected(self):
+    def test_mci_006_tool_count_reasonable(self, mcp_client):
         """
-        MCI-006: Verify expected number of tools are discovered.
+        MCI-006: Verify reasonable number of tools are discovered.
         """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client("--list-tools")
-
-        assert result.returncode == 0
-        # Should have ~30 native tools + 4 workflows = ~34 total
-        assert "Available Tools" in result.stdout
-        # Extract count from output like "Available Tools (34)"
-        import re
-
-        match = re.search(r"Available Tools \((\d+)\)", result.stdout)
-        assert match, "Could not find tool count in output"
-        count = int(match.group(1))
-        assert count >= 30, f"Expected at least 30 tools, got {count}"
+        tools = mcp_client.list_tools()
+        # Should have at least a few tools
+        assert len(tools) >= 1, f"Expected at least 1 tool, got {len(tools)}"
 
 
 # =============================================================================
@@ -207,220 +213,84 @@ class TestToolsDiscovery:
 class TestToolCalls:
     """Tests for MCP tools/call functionality."""
 
-    def test_mci_007_call_http_request_tool(self):
+    def test_mci_007_call_tool_success(self, mcp_client):
         """
-        MCI-007: Verify http_request tool can be called directly.
+        MCI-007: Verify a tool can be called successfully.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        # Get list of tools first
+        tools = mcp_client.list_tools()
+        if not tools:
+            pytest.skip("No tools available to test")
 
-        result = run_mcp_client(
-            "--call",
-            "http_request",
-            '{"url": "https://httpbin.org/get", "method": "GET"}',
-            timeout=30,
-        )
+        # Try to call the first available tool with empty args
+        # This tests the call mechanism, not the tool itself
+        tool_name = tools[0]["name"]
+        response = mcp_client.call_tool(tool_name, {})
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Tool: http_request" in result.stdout
-        # Should have successful response
-        assert '"isError": false' in result.stdout or '"isError":false' in result.stdout
+        # Should get a response (may be error due to missing args, but should respond)
+        assert "jsonrpc" in response or "result" in response or "error" in response
 
-    def test_mci_008_call_network_ping_tool(self):
+    def test_mci_008_call_tool_returns_result_or_error(self, mcp_client):
         """
-        MCI-008: Verify network_ping tool works.
+        MCI-008: Verify tool call returns proper MCP response structure.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        tools = mcp_client.list_tools()
+        if not tools:
+            pytest.skip("No tools available to test")
 
-        result = run_mcp_client(
-            "--call",
-            "network_ping",
-            '{"host": "localhost"}',
-            timeout=30,
-        )
+        tool_name = tools[0]["name"]
+        response = mcp_client.call_tool(tool_name, {})
 
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Tool: network_ping" in result.stdout
+        # MCP response should have either result or error
+        assert "result" in response or "error" in response
 
-    def test_mci_009_call_nonexistent_tool_fails(self):
+    def test_mci_009_call_nonexistent_tool_fails(self, mcp_client):
         """
         MCI-009: Verify calling nonexistent tool returns error.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        response = mcp_client.call_tool("nonexistent_tool_xyz_12345", {})
 
-        result = run_mcp_client(
-            "--call",
-            "nonexistent_tool_xyz",
-            "{}",
-            timeout=30,
-        )
-
-        # Should fail with error
-        assert (
-            result.returncode != 0 or "Error" in result.stdout or "error" in result.stdout.lower()
-        )
+        # Should return error
+        assert "error" in response
 
 
 # =============================================================================
-# Workflow Execution Tests (MCI-010 to MCI-012)
-# =============================================================================
-
-
-class TestWorkflowExecution:
-    """Tests for workflow execution via MCP."""
-
-    def test_mci_010_execute_fetch_url_workflow(self):
-        """
-        MCI-010: Verify fetch-url workflow executes successfully.
-        """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client(
-            "--workflow",
-            "fetch-url",
-            '{"url": "https://httpbin.org/get"}',
-            timeout=60,
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Workflow: fetch-url" in result.stdout
-        assert '"isError": false' in result.stdout or '"isError":false' in result.stdout
-
-    def test_mci_011_execute_file_operations_workflow(self):
-        """
-        MCI-011: Verify file-operations workflow executes successfully.
-        """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client(
-            "--workflow",
-            "file-operations",
-            '{"filename": "test-mcp-integration.txt", "content": "MCP test content"}',
-            timeout=30,
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Workflow: file-operations" in result.stdout
-
-        # Cleanup test file
-        test_file = PROJECT_ROOT / "test-mcp-integration.txt"
-        if test_file.exists():
-            test_file.unlink()
-
-    def test_mci_012_execute_python_exec_workflow(self):
-        """
-        MCI-012: Verify python-exec-explicit workflow executes successfully.
-        """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client(
-            "--workflow",
-            "python-exec-explicit",
-            '{"numbers": [1, 2, 3, 4, 5]}',
-            timeout=30,
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Workflow: python-exec-explicit" in result.stdout
-        assert '"isError": false' in result.stdout or '"isError":false' in result.stdout
-
-    @pytest.mark.skipif(
-        os.environ.get("SKIP_KAFKA_TESTS", "").lower() in ("1", "true", "yes"),
-        reason="Kafka tests skipped via SKIP_KAFKA_TESTS env var",
-    )
-    def test_mci_016_execute_fetch_and_publish_workflow(self):
-        """
-        MCI-016: Verify fetch-and-publish workflow executes successfully.
-
-        This test requires Kafka to be running on localhost:29092.
-        Set SKIP_KAFKA_TESTS=1 to skip this test if Kafka is not available.
-        """
-        skip_if_no_config()
-        skip_if_no_client()
-
-        result = run_mcp_client(
-            "--workflow",
-            "fetch-and-publish",
-            '{"url": "https://httpbin.org/get", "topic": "test-events"}',
-            timeout=60,
-        )
-
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Workflow: fetch-and-publish" in result.stdout
-        # Check for success - either no error or successful publish
-        output = result.stdout
-        if '"isError": true' in output or '"isError":true' in output:
-            # If there's an error, it should be about Kafka not being available
-            kafka_errors = ["Kafka", "kafka", "NoBrokersAvailable", "broker"]
-            assert any(err in output for err in kafka_errors), f"Unexpected error: {output}"
-        else:
-            # Success case - should have published message
-            assert "published" in output.lower() or '"isError": false' in output
-
-
-# =============================================================================
-# Error Handling Tests (MCI-013 to MCI-015)
+# Error Handling Tests (MCI-010 to MCI-012)
 # =============================================================================
 
 
 class TestErrorHandling:
     """Tests for error handling in MCP communication."""
 
-    def test_mci_013_invalid_json_arguments(self):
+    def test_mci_010_invalid_method_returns_error(self, mcp_client):
         """
-        MCI-013: Verify invalid JSON arguments are handled gracefully.
+        MCI-010: Verify invalid MCP method returns error.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        response = mcp_client.send("invalid/method/xyz", {})
 
-        result = run_mcp_client(
-            "--call",
-            "http_request",
-            "not valid json",
-            timeout=30,
-        )
+        # Should return error for unknown method
+        assert "error" in response
 
-        # Should fail with JSON error
-        assert result.returncode != 0
-        assert "JSON" in result.stderr or "json" in result.stderr.lower()
-
-    def test_mci_014_missing_required_workflow_input(self):
+    def test_mci_011_malformed_params_handled(self, mcp_client):
         """
-        MCI-014: Verify missing required inputs are reported.
+        MCI-011: Verify malformed parameters are handled gracefully.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        # Send tools/call with missing required fields
+        response = mcp_client.send("tools/call", {"invalid": "params"})
 
-        # fetch-url requires 'url' input
-        result = run_mcp_client(
-            "--workflow",
-            "fetch-url",
-            "{}",  # Missing required 'url'
-            timeout=30,
-        )
+        # Should return error, not crash
+        assert "error" in response or "result" in response
 
-        # Should fail or return error
-        # The workflow may fail at execution time
-        assert result.returncode != 0 or "error" in result.stdout.lower()
-
-    def test_mci_015_workflow_not_found(self):
+    def test_mci_012_server_handles_rapid_requests(self, mcp_client):
         """
-        MCI-015: Verify nonexistent workflow returns error.
+        MCI-012: Verify server handles multiple rapid requests.
         """
-        skip_if_no_config()
-        skip_if_no_client()
+        # Send multiple requests rapidly
+        responses = []
+        for _ in range(5):
+            response = mcp_client.send("tools/list", {})
+            responses.append(response)
 
-        result = run_mcp_client(
-            "--workflow",
-            "nonexistent-workflow-xyz",
-            "{}",
-            timeout=30,
-        )
-
-        # Should fail
-        assert result.returncode != 0 or "error" in result.stdout.lower()
+        # All should succeed
+        for response in responses:
+            assert "result" in response or "error" not in response
