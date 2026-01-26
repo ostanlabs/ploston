@@ -568,9 +568,7 @@ if __name__ == "__main__":
     import asyncio
 
     # Start Redis watcher before running MCP server
-    asyncio.get_event_loop().run_until_complete(
-        get_config_manager().start_redis_watcher()
-    )
+    asyncio.get_event_loop().run_until_complete(get_config_manager().start_redis_watcher())
 
     # Run in HTTP mode by default for Docker deployment
     mcp.run(transport="http", host="0.0.0.0", port=8081)
