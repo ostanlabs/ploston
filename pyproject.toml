@@ -60,4 +60,5 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "ploston-cli>=1.0.0",
+    "schemathesis>=4.9.4",
 ]
