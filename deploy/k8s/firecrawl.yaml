@@ -1,0 +1,79 @@
+# =============================================================================
+# Firecrawl - Web Scraping Service
+# =============================================================================
+# Firecrawl provides web scraping capabilities for the Ploston stack.
+# Used by native-tools for firecrawl_scrape, firecrawl_search, etc.
+#
+# Usage:
+#   kubectl apply -f firecrawl.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firecrawl
+  namespace: ploston
+  labels:
+    app: firecrawl
+    component: scraping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firecrawl
+  template:
+    metadata:
+      labels:
+        app: firecrawl
+        component: scraping
+    spec:
+      containers:
+        - name: firecrawl
+          image: mendableai/firecrawl:latest
+          ports:
+            - containerPort: 3002
+              name: http
+          env:
+            - name: PORT
+              value: "3002"
+            - name: HOST
+              value: "0.0.0.0"
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firecrawl
+  namespace: ploston
+  labels:
+    app: firecrawl
+spec:
+  selector:
+    app: firecrawl
+  ports:
+    - port: 3002
+      targetPort: 3002
+      name: http
+  type: ClusterIP
+
