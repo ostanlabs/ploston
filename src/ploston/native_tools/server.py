@@ -42,6 +42,8 @@ structlog.configure(
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Reconfigure MCP library loggers to use stderr
 for logger_name in ["mcp", "mcp.client", "mcp.server", "fastmcp"]:
@@ -569,16 +571,8 @@ async def firecrawl_health() -> Dict[str, Any]:
 # =============================================================================
 
 
-@mcp.tool()
-async def health_check() -> Dict[str, Any]:
-    """Check native-tools health status including dependency availability.
-
-    Returns comprehensive health information including:
-    - Overall status (healthy/degraded/unhealthy)
-    - Dependency status for Kafka, Ollama, and Firecrawl
-    - Tool availability counts
-    - Redis config connection status
-    """
+async def _get_health_data() -> Dict[str, Any]:
+    """Get health data for native-tools service."""
     health_manager = get_health_manager()
     config_manager = get_config_manager()
 
@@ -590,6 +584,28 @@ async def health_check() -> Dict[str, Any]:
     health_response["config"] = config_manager.get_health_status()
 
     return health_response
+
+
+@mcp.tool()
+async def health_check() -> Dict[str, Any]:
+    """Check native-tools health status including dependency availability.
+
+    Returns comprehensive health information including:
+    - Overall status (healthy/degraded/unhealthy)
+    - Dependency status for Kafka, Ollama, and Firecrawl
+    - Tool availability counts
+    - Redis config connection status
+    """
+    return await _get_health_data()
+
+
+# HTTP health endpoint for Kubernetes probes and monitoring
+@mcp.custom_route("/health", methods=["GET"])
+async def http_health_check(request: Request) -> JSONResponse:
+    """HTTP health endpoint for Kubernetes liveness/readiness probes."""
+    health_data = await _get_health_data()
+    status_code = 200 if health_data.get("status") == "healthy" else 503
+    return JSONResponse(health_data, status_code=status_code)
 
 
 # =============================================================================
