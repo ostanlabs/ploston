@@ -54,6 +54,8 @@ for logger_name in ["mcp", "mcp.client", "mcp.server", "fastmcp"]:
 
 # Import core tool implementations from ploston_core
 from ploston_core.native_tools import (
+    # Health management
+    DependencyUnavailableError,
     analyze_sentiment,
     calculate_text_similarity,
     check_health_firecrawl,
@@ -63,8 +65,6 @@ from ploston_core.native_tools import (
     consume_messages_kafka,
     create_topic_kafka,
     delete_file_or_directory,
-    # Health management
-    DependencyUnavailableError,
     dns_lookup,
     extract_data_firecrawl,
     extract_metadata,
