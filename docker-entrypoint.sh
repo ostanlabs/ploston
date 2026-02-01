@@ -10,9 +10,10 @@ set -e
 # Build command arguments
 CMD_ARGS="--host ${AEL_HOST:-0.0.0.0} --port ${AEL_PORT:-8080}"
 
-# Add config file if specified
-if [ -n "${AEL_CONFIG}" ]; then
-    CMD_ARGS="--config ${AEL_CONFIG} ${CMD_ARGS}"
+# Add config file if specified (check both PLOSTON_CONFIG_PATH and AEL_CONFIG)
+CONFIG_FILE="${PLOSTON_CONFIG_PATH:-${AEL_CONFIG}}"
+if [ -n "${CONFIG_FILE}" ]; then
+    CMD_ARGS="--config ${CONFIG_FILE} ${CMD_ARGS}"
 fi
 
 # Execute the command using ploston-server
