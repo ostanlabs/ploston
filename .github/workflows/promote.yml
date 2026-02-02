@@ -125,3 +125,25 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Source:** ${{ steps.params.outputs.source }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:** ${{ steps.params.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+
+  notify-dashboard:
+    name: Notify Dashboard
+    if: github.event_name == 'release'
+    needs: [promote]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger dashboard refresh
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.META_REPO_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: release-published
+          client-payload: |
+            {
+              "package": "ploston",
+              "version": "${{ github.event.release.tag_name }}",
+              "release_url": "${{ github.event.release.html_url }}",
+              "run_id": "${{ github.run_id }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
