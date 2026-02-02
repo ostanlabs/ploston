@@ -1,3 +1,21 @@
+# =============================================================================
+# CI - Test & Build RC
+# =============================================================================
+# Unified workflow that runs tests and builds RC images on main.
+#
+# Flow:
+#   1. Push/PR triggers lint and tests
+#   2. If main + tests pass → build RC Docker image
+#   3. Trigger meta-repo E2E tests
+#   4. If E2E passes → promote.yml promotes RC to :latest
+#
+# Triggered by:
+#   - Push to main
+#   - Pull request to main
+#   - ploston-core CI passing (repository_dispatch: core-updated)
+#   - Manual workflow dispatch
+# =============================================================================
+
 name: CI
 
 on:
@@ -5,6 +23,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  repository_dispatch:
+    types: [core-updated]
   workflow_dispatch:
 
 jobs:
@@ -162,6 +182,199 @@ jobs:
 
   # NOTE: Property tests and E2E tests require a running server
   # They are run in the meta-repo (agent-execution-layer) against Docker/homelab
+
+  # ===========================================================================
+  # Build RC Image (only on main after tests pass)
+  # ===========================================================================
+  build-rc:
+    name: Build RC Image
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      tag: ${{ steps.vars.outputs.tag }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      sha: ${{ steps.sha.outputs.sha }}
+      core_short_sha: ${{ steps.vars.outputs.core_short_sha }}
+      core_sha: ${{ steps.core.outputs.sha }}
+      triggered_by: ${{ steps.trigger.outputs.source }}
+
+    env:
+      REGISTRY: docker.io
+      IMAGE_NAME: ostanlabs/ploston
+      NATIVE_TOOLS_IMAGE_NAME: ostanlabs/native-tools
+
+    steps:
+      - name: Determine trigger source
+        id: trigger
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "source=ploston-core" >> $GITHUB_OUTPUT
+          else
+            echo "source=ploston" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout meta-repo (contains Dockerfile)
+        uses: actions/checkout@v4
+        with:
+          repository: ostanlabs/agent-execution-layer
+          submodules: recursive
+          token: ${{ secrets.META_REPO_TOKEN }}
+
+      - name: Determine ploston commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            cd packages/ploston
+            git fetch origin main
+            SHA=$(git rev-parse origin/main)
+            cd ../..
+          else
+            SHA="${{ github.sha }}"
+          fi
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo $SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Determine ploston-core commit SHA
+        id: core
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            CORE_SHA="${{ github.event.client_payload.core_sha }}"
+          else
+            cd packages/ploston-core
+            CORE_SHA=$(git rev-parse HEAD)
+            cd ../..
+          fi
+          echo "sha=$CORE_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo $CORE_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Update submodules to target commits
+        run: |
+          cd packages/ploston
+          git fetch origin ${{ steps.sha.outputs.sha }}
+          git checkout ${{ steps.sha.outputs.sha }}
+          cd ../..
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            cd packages/ploston-core
+            git fetch origin ${{ steps.core.outputs.sha }}
+            git checkout ${{ steps.core.outputs.sha }}
+            cd ../..
+          fi
+
+      - name: Set variables
+        id: vars
+        run: |
+          PLOSTON_SHA="${{ steps.sha.outputs.short_sha }}"
+          CORE_SHA="${{ steps.core.outputs.short_sha }}"
+          TAG="rc-${PLOSTON_SHA}-core-${CORE_SHA}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$PLOSTON_SHA" >> $GITHUB_OUTPUT
+          echo "core_short_sha=$CORE_SHA" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.tag }}
+
+      - name: Build and push ploston Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
+
+      - name: Extract metadata for native-tools
+        id: meta-native-tools
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.tag }}
+
+      - name: Build and push native-tools Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/native-tools/Dockerfile
+          push: true
+          tags: ${{ steps.meta-native-tools.outputs.tags }}
+          labels: ${{ steps.meta-native-tools.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image info
+        run: |
+          echo "## RC Images Built 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| ploston | \`${{ steps.vars.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| native-tools | \`${{ steps.vars.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Trigger E2E Tests in Meta-Repo
+  # ===========================================================================
+  trigger-e2e:
+    name: Trigger E2E Tests
+    needs: build-rc
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+    env:
+      REGISTRY: docker.io
+      IMAGE_NAME: ostanlabs/ploston
+      NATIVE_TOOLS_IMAGE_NAME: ostanlabs/native-tools
+
+    steps:
+      - name: Trigger meta-repo test-rc workflow
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.META_REPO_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: rc-ready
+          client-payload: |
+            {
+              "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}",
+              "native_tools_image": "${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ needs.build-rc.outputs.tag }}",
+              "tag": "${{ needs.build-rc.outputs.tag }}",
+              "sha": "${{ needs.build-rc.outputs.sha }}",
+              "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
+              "core_sha": "${{ needs.build-rc.outputs.core_sha }}",
+              "core_short_sha": "${{ needs.build-rc.outputs.core_short_sha }}",
+              "triggered_by": "${{ needs.build-rc.outputs.triggered_by }}",
+              "ref": "${{ github.ref }}",
+              "actor": "${{ github.actor }}"
+            }
+
+      - name: Summary
+        run: |
+          echo "## E2E Tests Triggered 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Meta-repo will run E2E tests against RC images." >> $GITHUB_STEP_SUMMARY
 
   test-summary:
     name: Test Summary
