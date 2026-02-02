@@ -200,9 +200,6 @@ jobs:
       tag: ${{ steps.vars.outputs.tag }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
       sha: ${{ steps.sha.outputs.sha }}
-      core_short_sha: ${{ steps.vars.outputs.core_short_sha }}
-      core_sha: ${{ steps.core.outputs.sha }}
-      triggered_by: ${{ steps.trigger.outputs.source }}
 
     env:
       REGISTRY: docker.io
@@ -210,71 +207,22 @@ jobs:
       NATIVE_TOOLS_IMAGE_NAME: ostanlabs/native-tools
 
     steps:
-      - name: Determine trigger source
-        id: trigger
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "source=ploston-core" >> $GITHUB_OUTPUT
-          else
-            echo "source=ploston" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Checkout meta-repo (contains Dockerfile)
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          repository: ostanlabs/agent-execution-layer
-          submodules: recursive
-          token: ${{ secrets.META_REPO_TOKEN }}
 
-      - name: Determine ploston commit SHA
+      - name: Determine commit SHA
         id: sha
         run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            cd packages/ploston
-            git fetch origin main
-            SHA=$(git rev-parse origin/main)
-            cd ../..
-          else
-            SHA="${{ github.sha }}"
-          fi
-          echo "sha=$SHA" >> $GITHUB_OUTPUT
-          echo "short_sha=$(echo $SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Determine ploston-core commit SHA
-        id: core
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            CORE_SHA="${{ github.event.client_payload.core_sha }}"
-          else
-            cd packages/ploston-core
-            CORE_SHA=$(git rev-parse HEAD)
-            cd ../..
-          fi
-          echo "sha=$CORE_SHA" >> $GITHUB_OUTPUT
-          echo "short_sha=$(echo $CORE_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Update submodules to target commits
-        run: |
-          cd packages/ploston
-          git fetch origin ${{ steps.sha.outputs.sha }}
-          git checkout ${{ steps.sha.outputs.sha }}
-          cd ../..
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            cd packages/ploston-core
-            git fetch origin ${{ steps.core.outputs.sha }}
-            git checkout ${{ steps.core.outputs.sha }}
-            cd ../..
-          fi
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Set variables
         id: vars
         run: |
-          PLOSTON_SHA="${{ steps.sha.outputs.short_sha }}"
-          CORE_SHA="${{ steps.core.outputs.short_sha }}"
-          TAG="rc-${PLOSTON_SHA}-core-${CORE_SHA}"
+          SHORT_SHA="${{ steps.sha.outputs.short_sha }}"
+          TAG="rc-${SHORT_SHA}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "short_sha=$PLOSTON_SHA" >> $GITHUB_OUTPUT
-          echo "core_short_sha=$CORE_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
 
       - name: Log in to Docker Hub
@@ -304,7 +252,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_SHA=${{ github.sha }}
+            BUILD_SHA=${{ steps.sha.outputs.sha }}
             BUILD_DATE=${{ steps.vars.outputs.timestamp }}
 
       - name: Extract metadata for native-tools
@@ -325,6 +273,9 @@ jobs:
           labels: ${{ steps.meta-native-tools.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ steps.sha.outputs.sha }}
+            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
 
       - name: Output image info
         run: |
@@ -363,9 +314,6 @@ jobs:
               "tag": "${{ needs.build-rc.outputs.tag }}",
               "sha": "${{ needs.build-rc.outputs.sha }}",
               "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
-              "core_sha": "${{ needs.build-rc.outputs.core_sha }}",
-              "core_short_sha": "${{ needs.build-rc.outputs.core_short_sha }}",
-              "triggered_by": "${{ needs.build-rc.outputs.triggered_by }}",
               "ref": "${{ github.ref }}",
               "actor": "${{ github.actor }}"
             }
