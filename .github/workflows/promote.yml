@@ -32,11 +32,6 @@ on:
         required: true
         default: 'latest,main'
 
-env:
-  REGISTRY: docker.io
-  IMAGE_NAME: ostanlabs/ploston
-  NATIVE_TOOLS_IMAGE_NAME: ostanlabs/native-tools
-
 jobs:
   promote:
     name: Promote to Production
@@ -46,34 +41,68 @@ jobs:
       tags: ${{ steps.params.outputs.tags }}
 
     steps:
+      - name: Fetch image config from meta-repo
+        id: config
+        run: |
+          # Fetch the single source of truth for image naming
+          curl -sL https://raw.githubusercontent.com/ostanlabs/agent-execution-layer/main/ci/image-config.env -o image-config.env
+          source image-config.env
+
+          # Export config values
+          echo "registry=${PUBLIC_REGISTRY}" >> $GITHUB_OUTPUT
+          echo "org=${PUBLIC_ORG}" >> $GITHUB_OUTPUT
+          echo "ploston_image=${PLOSTON_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "native_tools_image=${NATIVE_TOOLS_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "dev_tag_template=${DEV_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
+          echo "dev_latest_tag=${DEV_LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "release_tag_template=${RELEASE_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
+          echo "release_latest_tag=${RELEASE_LATEST_TAG}" >> $GITHUB_OUTPUT
+
       - name: Determine promotion parameters
         id: params
+        env:
+          DEV_TAG_TEMPLATE: ${{ steps.config.outputs.dev_tag_template }}
+          DEV_LATEST_TAG: ${{ steps.config.outputs.dev_latest_tag }}
+          RELEASE_TAG_TEMPLATE: ${{ steps.config.outputs.release_tag_template }}
+          RELEASE_LATEST_TAG: ${{ steps.config.outputs.release_latest_tag }}
+          REGISTRY: ${{ steps.config.outputs.registry }}
+          ORG: ${{ steps.config.outputs.org }}
+          PLOSTON_IMAGE: ${{ steps.config.outputs.ploston_image }}
+          NATIVE_TOOLS_IMAGE: ${{ steps.config.outputs.native_tools_image }}
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             SHA="${{ github.event.client_payload.sha }}"
             SHORT_SHA="${SHA:0:7}"
             echo "image=${{ github.event.client_payload.image }}" >> $GITHUB_OUTPUT
             echo "native_tools_image=${{ github.event.client_payload.native_tools_image }}" >> $GITHUB_OUTPUT
-            # Tag as dev-<commit_hash> to preserve history (don't overwrite 'main')
-            echo "tags=dev-${SHORT_SHA},dev" >> $GITHUB_OUTPUT
+            # Use tag template from config (replace {short_sha} placeholder)
+            DEV_TAG="${DEV_TAG_TEMPLATE//\{short_sha\}/$SHORT_SHA}"
+            echo "tags=${DEV_TAG},${DEV_LATEST_TAG}" >> $GITHUB_OUTPUT
             echo "sha=$SHA" >> $GITHUB_OUTPUT
             echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "source=e2e-passed" >> $GITHUB_OUTPUT
+            # Store full image refs for promotion
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "release" ]; then
-            # For releases, we need to find the latest RC or build fresh
             VERSION="${{ github.event.release.tag_name }}"
             VERSION="${VERSION#v}"  # Remove 'v' prefix if present
             MAJOR=$(echo $VERSION | cut -d. -f1)
             MINOR=$(echo $VERSION | cut -d. -f2)
-            echo "tags=${VERSION},${MAJOR}.${MINOR},${MAJOR},latest" >> $GITHUB_OUTPUT
+            # Use tag templates from config
+            echo "tags=${VERSION},${MAJOR}.${MINOR},${MAJOR},${RELEASE_LATEST_TAG}" >> $GITHUB_OUTPUT
             echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
             echo "source=release" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
           else
             echo "image=${{ github.event.inputs.image }}" >> $GITHUB_OUTPUT
             echo "tags=${{ github.event.inputs.tags }}" >> $GITHUB_OUTPUT
             echo "sha=manual" >> $GITHUB_OUTPUT
             echo "source=manual" >> $GITHUB_OUTPUT
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to Docker Hub
@@ -89,9 +118,9 @@ jobs:
           docker pull ${{ steps.params.outputs.image }}
           IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
           for tag in "${TAGS[@]}"; do
-            docker tag ${{ steps.params.outputs.image }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}
-            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}
-            echo "Pushed ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+            docker tag ${{ steps.params.outputs.image }} ${{ steps.params.outputs.ploston_full }}:${tag}
+            docker push ${{ steps.params.outputs.ploston_full }}:${tag}
+            echo "Pushed ${{ steps.params.outputs.ploston_full }}:${tag}"
           done
 
       - name: Pull and re-tag RC image (native-tools)
@@ -100,9 +129,9 @@ jobs:
           docker pull ${{ steps.params.outputs.native_tools_image }}
           IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
           for tag in "${TAGS[@]}"; do
-            docker tag ${{ steps.params.outputs.native_tools_image }} ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${tag}
-            docker push ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${tag}
-            echo "Pushed ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${tag}"
+            docker tag ${{ steps.params.outputs.native_tools_image }} ${{ steps.params.outputs.native_tools_full }}:${tag}
+            docker push ${{ steps.params.outputs.native_tools_full }}:${tag}
+            echo "Pushed ${{ steps.params.outputs.native_tools_full }}:${tag}"
           done
 
       # For releases: checkout and build fresh with version tags
@@ -124,7 +153,7 @@ jobs:
           IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
           TAG_ARGS=""
           for tag in "${TAGS[@]}"; do
-            TAG_ARGS="$TAG_ARGS -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+            TAG_ARGS="$TAG_ARGS -t ${{ steps.params.outputs.ploston_full }}:${tag}"
           done
           docker buildx build --push $TAG_ARGS .
 
