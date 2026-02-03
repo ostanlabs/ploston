@@ -208,9 +208,23 @@ jobs:
 
       - name: Fetch image config from meta-repo
         id: config
+        env:
+          GH_TOKEN: ${{ secrets.META_REPO_TOKEN }}
         run: |
-          # Fetch the single source of truth for image naming
-          curl -sL https://raw.githubusercontent.com/ostanlabs/agent-execution-layer/main/ci/image-config.env -o image-config.env
+          # Fetch the single source of truth for image naming from private meta-repo
+          # Uses GitHub API since raw.githubusercontent.com doesn't work for private repos
+          curl -sL \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.v3.raw" \
+            "https://api.github.com/repos/ostanlabs/agent-execution-layer/contents/ci/image-config.env?ref=main" \
+            -o image-config.env
+
+          # Verify file was fetched successfully
+          if [ ! -s image-config.env ]; then
+            echo "Error: Failed to fetch image-config.env from meta-repo"
+            exit 1
+          fi
+
           source image-config.env
 
           # Export config values (stage-specific image names for RC)
