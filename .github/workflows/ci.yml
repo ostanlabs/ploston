@@ -213,11 +213,11 @@ jobs:
           curl -sL https://raw.githubusercontent.com/ostanlabs/agent-execution-layer/main/ci/image-config.env -o image-config.env
           source image-config.env
 
-          # Export config values
+          # Export config values (stage-specific image names for RC)
           echo "registry=${PUBLIC_REGISTRY}" >> $GITHUB_OUTPUT
           echo "org=${PUBLIC_ORG}" >> $GITHUB_OUTPUT
-          echo "ploston_image=${PLOSTON_IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "native_tools_image=${NATIVE_TOOLS_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "ploston_rc_image=${PLOSTON_RC_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "native_tools_rc_image=${NATIVE_TOOLS_RC_IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "rc_tag_template=${RC_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
 
       - name: Determine commit SHA
@@ -238,11 +238,11 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
 
-          # Full image references
+          # Full image references (using stage-specific RC image names)
           REGISTRY="${{ steps.config.outputs.registry }}"
           ORG="${{ steps.config.outputs.org }}"
-          echo "ploston_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.ploston_image }}:${TAG}" >> $GITHUB_OUTPUT
-          echo "native_tools_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.native_tools_image }}:${TAG}" >> $GITHUB_OUTPUT
+          echo "ploston_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.ploston_rc_image }}:${TAG}" >> $GITHUB_OUTPUT
+          echo "native_tools_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.native_tools_rc_image }}:${TAG}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

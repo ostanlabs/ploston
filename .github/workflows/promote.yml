@@ -48,11 +48,16 @@ jobs:
           curl -sL https://raw.githubusercontent.com/ostanlabs/agent-execution-layer/main/ci/image-config.env -o image-config.env
           source image-config.env
 
-          # Export config values
+          # Export config values (stage-specific image names)
           echo "registry=${PUBLIC_REGISTRY}" >> $GITHUB_OUTPUT
           echo "org=${PUBLIC_ORG}" >> $GITHUB_OUTPUT
-          echo "ploston_image=${PLOSTON_IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "native_tools_image=${NATIVE_TOOLS_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          # Dev stage image names (for dev promotion)
+          echo "ploston_dev_image=${PLOSTON_DEV_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "native_tools_dev_image=${NATIVE_TOOLS_DEV_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          # Release stage image names
+          echo "ploston_release_image=${PLOSTON_RELEASE_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "native_tools_release_image=${NATIVE_TOOLS_RELEASE_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          # Tag templates
           echo "dev_tag_template=${DEV_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
           echo "dev_latest_tag=${DEV_LATEST_TAG}" >> $GITHUB_OUTPUT
           echo "release_tag_template=${RELEASE_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
@@ -67,8 +72,10 @@ jobs:
           RELEASE_LATEST_TAG: ${{ steps.config.outputs.release_latest_tag }}
           REGISTRY: ${{ steps.config.outputs.registry }}
           ORG: ${{ steps.config.outputs.org }}
-          PLOSTON_IMAGE: ${{ steps.config.outputs.ploston_image }}
-          NATIVE_TOOLS_IMAGE: ${{ steps.config.outputs.native_tools_image }}
+          PLOSTON_DEV_IMAGE: ${{ steps.config.outputs.ploston_dev_image }}
+          NATIVE_TOOLS_DEV_IMAGE: ${{ steps.config.outputs.native_tools_dev_image }}
+          PLOSTON_RELEASE_IMAGE: ${{ steps.config.outputs.ploston_release_image }}
+          NATIVE_TOOLS_RELEASE_IMAGE: ${{ steps.config.outputs.native_tools_release_image }}
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             SHA="${{ github.event.client_payload.sha }}"
@@ -81,9 +88,9 @@ jobs:
             echo "sha=$SHA" >> $GITHUB_OUTPUT
             echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "source=e2e-passed" >> $GITHUB_OUTPUT
-            # Store full image refs for promotion
-            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
+            # Store full image refs for promotion (using dev stage image names)
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_DEV_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_DEV_IMAGE}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
             VERSION="${VERSION#v}"  # Remove 'v' prefix if present
@@ -94,15 +101,17 @@ jobs:
             echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
             echo "source=release" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
+            # Use release stage image names
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
           else
             echo "image=${{ github.event.inputs.image }}" >> $GITHUB_OUTPUT
             echo "tags=${{ github.event.inputs.tags }}" >> $GITHUB_OUTPUT
             echo "sha=manual" >> $GITHUB_OUTPUT
             echo "source=manual" >> $GITHUB_OUTPUT
-            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_IMAGE}" >> $GITHUB_OUTPUT
+            # Default to dev image names for manual promotion
+            echo "ploston_full=${REGISTRY}/${ORG}/${PLOSTON_DEV_IMAGE}" >> $GITHUB_OUTPUT
+            echo "native_tools_full=${REGISTRY}/${ORG}/${NATIVE_TOOLS_DEV_IMAGE}" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to Docker Hub
