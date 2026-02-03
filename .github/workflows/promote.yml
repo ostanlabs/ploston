@@ -5,10 +5,12 @@
 #
 # Triggers:
 #   - repository_dispatch (rc-tests-passed): Auto-promote after E2E tests pass
-#     → Tags: :latest, :main
+#     → Tags: :dev-<commit_hash>, :dev (preserves history)
 #   - GitHub Release: Versioned release
 #     → Tags: :v1.0.0, :1.0, :1, :latest
 #   - Manual: Specify RC image and target tags
+#
+# Both ploston and native-tools images are promoted together.
 # =============================================================================
 
 name: Promote
@@ -39,16 +41,23 @@ jobs:
   promote:
     name: Promote to Production
     runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.params.outputs.short_sha }}
+      tags: ${{ steps.params.outputs.tags }}
 
     steps:
       - name: Determine promotion parameters
         id: params
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            SHA="${{ github.event.client_payload.sha }}"
+            SHORT_SHA="${SHA:0:7}"
             echo "image=${{ github.event.client_payload.image }}" >> $GITHUB_OUTPUT
             echo "native_tools_image=${{ github.event.client_payload.native_tools_image }}" >> $GITHUB_OUTPUT
-            echo "tags=latest,main" >> $GITHUB_OUTPUT
-            echo "sha=${{ github.event.client_payload.sha }}" >> $GITHUB_OUTPUT
+            # Tag as dev-<commit_hash> to preserve history (don't overwrite 'main')
+            echo "tags=dev-${SHORT_SHA},dev" >> $GITHUB_OUTPUT
+            echo "sha=$SHA" >> $GITHUB_OUTPUT
+            echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "source=e2e-passed" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "release" ]; then
             # For releases, we need to find the latest RC or build fresh
@@ -121,13 +130,36 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🎉 Promoted to Production!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 Promoted!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Source:** ${{ steps.params.outputs.source }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:** ${{ steps.params.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ steps.params.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
 
-  notify-dashboard:
-    name: Notify Dashboard
+  notify-dashboard-dev:
+    name: Notify Dashboard (Dev)
+    if: github.event_name == 'repository_dispatch'
+    needs: [promote]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger dashboard refresh for dev image
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.META_REPO_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: dev-promoted
+          client-payload: |
+            {
+              "package": "ploston",
+              "tag": "dev-${{ needs.promote.outputs.short_sha }}",
+              "sha": "${{ github.event.client_payload.sha }}",
+              "run_id": "${{ github.run_id }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+
+  notify-dashboard-release:
+    name: Notify Dashboard (Release)
     if: github.event_name == 'release'
     needs: [promote]
     runs-on: ubuntu-latest

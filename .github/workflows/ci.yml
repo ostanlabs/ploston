@@ -262,37 +262,47 @@ jobs:
       - name: Push ploston Docker image
         run: docker push ${{ steps.meta.outputs.tags }}
 
-      # NOTE: native-tools build is disabled until ploston is published to PyPI
-      # The native-tools Dockerfile installs from PyPI, so it can't build until
-      # ploston package is available on PyPI.
-      # TODO: Enable this once ploston is published to PyPI
-      # - name: Extract metadata for native-tools
-      #   id: meta-native-tools
-      #   uses: docker/metadata-action@v5
-      #   with:
-      #     images: ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}
-      #     tags: |
-      #       type=raw,value=${{ steps.vars.outputs.tag }}
-      #
-      # - name: Build and push native-tools Docker image
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     file: docker/native-tools/Dockerfile
-      #     push: true
-      #     tags: ${{ steps.meta-native-tools.outputs.tags }}
-      #     labels: ${{ steps.meta-native-tools.outputs.labels }}
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-      #     build-args: |
-      #       BUILD_SHA=${{ steps.sha.outputs.sha }}
-      #       BUILD_DATE=${{ steps.vars.outputs.timestamp }}
+      # Build native-tools from meta-repo (it has the Dockerfile)
+      - name: Checkout meta-repo for native-tools build
+        uses: actions/checkout@v4
+        with:
+          repository: ostanlabs/agent-execution-layer
+          token: ${{ secrets.META_REPO_TOKEN }}
+          path: meta-repo
+          submodules: recursive
+
+      - name: Extract metadata for native-tools
+        id: meta-native-tools
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.tag }}
+
+      - name: Build native-tools Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: meta-repo
+          file: meta-repo/docker/native-tools/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta-native-tools.outputs.tags }}
+          labels: ${{ steps.meta-native-tools.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ steps.sha.outputs.sha }}
+            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
+
+      - name: Push native-tools Docker image
+        run: docker push ${{ steps.meta-native-tools.outputs.tags }}
 
       - name: Output image info
         run: |
-          echo "## RC Image Built 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "## RC Images Built 🐳" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**ploston:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**native-tools:** \`${{ env.REGISTRY }}/${{ env.NATIVE_TOOLS_IMAGE_NAME }}:${{ steps.vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # Trigger E2E Tests in Meta-Repo
