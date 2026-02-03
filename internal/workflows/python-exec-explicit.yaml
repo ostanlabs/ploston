@@ -1,39 +1,28 @@
 name: python-exec-explicit
 version: "1.0.0"
-description: Demonstrate both python_exec modes
+description: Execute Python code to compute statistics
 
 inputs:
   - numbers:
       type: array
       default: [1, 2, 3, 4, 5]
+      description: List of numbers to compute statistics for
 
 steps:
-  # Implicit mode: code: block uses system defaults
-  # Access inputs via context.inputs dict
-  - id: implicit_sum
-    code: |
-      numbers = context.inputs["numbers"]
-      result = sum(numbers)
-
-  # Explicit mode: tool: python_exec with custom config
-  # When using tool: python_exec, pass data via context param
-  # Context values become global variables in the sandbox
-  - id: explicit_stats
+  # Single step using inline template resolution
+  # The {{ inputs.numbers }} is resolved before code execution
+  - id: compute
     tool: python_exec
     params:
       code: |
         import statistics
+        numbers = {{ inputs.numbers }}
         result = {
+          "sum": sum(numbers),
           "mean": statistics.mean(numbers),
           "stdev": statistics.stdev(numbers) if len(numbers) > 1 else 0
         }
-      context:
-        numbers: "{{ inputs.numbers }}"
-      timeout: 60
 
 outputs:
-  sum:
-    from: steps.implicit_sum.output
-  stats:
-    from: steps.explicit_stats.output
-
+  result:
+    from: steps.compute.output
