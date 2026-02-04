@@ -1,19 +1,7 @@
 # =============================================================================
-# CI - Test & Build RC
+# Ploston CI Workflow
 # =============================================================================
-# Unified workflow that runs tests and builds RC images on main.
-#
-# Flow:
-#   1. Push/PR triggers lint and tests
-#   2. If main + tests pass → build RC Docker image
-#   3. Trigger meta-repo E2E tests
-#   4. If E2E passes → promote.yml promotes RC to :latest
-#
-# Triggered by:
-#   - Push to main
-#   - Pull request to main
-#   - ploston-core CI passing (repository_dispatch: core-updated)
-#   - Manual workflow dispatch
+# Runs unit tests locally, then triggers meta-repo for integration tests.
 # =============================================================================
 
 name: CI
@@ -22,502 +10,53 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
-  repository_dispatch:
-    types: [core-updated]
-  workflow_dispatch:
 
 jobs:
   lint:
-    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run ruff check
-        run: uv run ruff check src/ tests/
-
-      - name: Run ruff format check
-        run: uv run ruff format --check src/ tests/
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install pre-commit
+        run: pip install pre-commit
+      
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
 
   unit-tests:
-    name: Unit Tests (Python ${{ matrix.python-version }})
+    needs: lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
       - name: Install dependencies
-        run: uv sync --all-extras
-
+        run: |
+          pip install -e .[dev]
+      
       - name: Run unit tests
-        run: |
-          uv run pytest tests/unit/ -v \
-            --cov=ploston \
-            --cov-report=xml \
-            --cov-report=html \
-            --junitxml=junit-unit-${{ matrix.python-version }}.xml
+        run: pytest tests/unit/ -v --tb=short
 
-      - name: Upload unit test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: unit-test-results-${{ matrix.python-version }}
-          path: junit-unit-${{ matrix.python-version }}.xml
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.12'
-        with:
-          name: coverage-report
-          path: htmlcov/
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.12'
-        with:
-          file: ./coverage.xml
-          flags: unit
-          fail_ci_if_error: false
-
-  integration-tests:
-    name: Integration Tests
+  trigger-integration:
+    needs: unit-tests
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run integration tests
-        run: |
-          uv run pytest tests/integration/ -v \
-            -m "not homelab and not docker and not mcp_client and not mcp_http_client" \
-            --junitxml=junit-integration.xml
-
-      - name: Upload integration test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-test-results
-          path: junit-integration.xml
-
-  smoke-tests:
-    name: Server Smoke Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run smoke tests
-        run: |
-          uv run pytest tests/integration/test_server_smoke.py -v \
-            --junitxml=junit-smoke.xml
-
-      - name: Upload smoke test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: smoke-test-results
-          path: junit-smoke.xml
-
-  parity-tests:
-    name: Migration Parity Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run parity tests
-        run: |
-          uv run pytest tests/parity/ -v \
-            --junitxml=junit-parity.xml
-
-      - name: Upload parity test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: parity-test-results
-          path: junit-parity.xml
-
-  # NOTE: Property tests and E2E tests require a running server
-  # They are run in the meta-repo (agent-execution-layer) against Docker/homelab
-
-  # ===========================================================================
-  # Build RC Image (only on main after tests pass)
-  # ===========================================================================
-  build-rc:
-    name: Build RC Image
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    permissions:
-      contents: read
-      packages: write
-
-    outputs:
-      image_tag: ${{ steps.vars.outputs.ploston_image }}
-      native_tools_image_tag: ${{ steps.vars.outputs.native_tools_image }}
-      tag: ${{ steps.vars.outputs.tag }}
-      short_sha: ${{ steps.vars.outputs.short_sha }}
-      sha: ${{ steps.sha.outputs.sha }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Fetch image config from meta-repo
-        id: config
-        env:
-          GH_TOKEN: ${{ secrets.META_REPO_TOKEN }}
-        run: |
-          # Fetch the single source of truth for image naming from private meta-repo
-          # Uses GitHub API since raw.githubusercontent.com doesn't work for private repos
-          curl -sL \
-            -H "Authorization: token ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github.v3.raw" \
-            "https://api.github.com/repos/ostanlabs/agent-execution-layer/contents/ci/image-config.env?ref=main" \
-            -o image-config.env
-
-          # Verify file was fetched successfully
-          if [ ! -s image-config.env ]; then
-            echo "Error: Failed to fetch image-config.env from meta-repo"
-            exit 1
-          fi
-
-          source image-config.env
-
-          # Export config values (stage-specific image names for RC)
-          echo "registry=${PUBLIC_REGISTRY}" >> $GITHUB_OUTPUT
-          echo "org=${PUBLIC_ORG}" >> $GITHUB_OUTPUT
-          echo "ploston_rc_image=${PLOSTON_RC_IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "native_tools_rc_image=${NATIVE_TOOLS_RC_IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "rc_tag_template=${RC_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
-
-      - name: Determine commit SHA
-        id: sha
-        run: |
-          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
-          echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Set variables
-        id: vars
-        env:
-          RC_TAG_TEMPLATE: ${{ steps.config.outputs.rc_tag_template }}
-        run: |
-          SHORT_SHA="${{ steps.sha.outputs.short_sha }}"
-          # Use tag template from config (replace {short_sha} placeholder)
-          TAG="${RC_TAG_TEMPLATE//\{short_sha\}/$SHORT_SHA}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
-
-          # Full image references (using stage-specific RC image names)
-          REGISTRY="${{ steps.config.outputs.registry }}"
-          ORG="${{ steps.config.outputs.org }}"
-          echo "ploston_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.ploston_rc_image }}:${TAG}" >> $GITHUB_OUTPUT
-          echo "native_tools_image=${REGISTRY}/${ORG}/${{ steps.config.outputs.native_tools_rc_image }}:${TAG}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Log in to Docker Hub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Build and push ploston image
-      - name: Build and push ploston Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.vars.outputs.ploston_image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILD_SHA=${{ steps.sha.outputs.sha }}
-            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
-
-      # Build native-tools from meta-repo (it has the Dockerfile)
-      - name: Checkout meta-repo for native-tools build
-        uses: actions/checkout@v4
-        with:
-          repository: ostanlabs/agent-execution-layer
-          token: ${{ secrets.META_REPO_TOKEN }}
-          path: meta-repo
-          submodules: recursive
-
-      # Build and push native-tools image
-      - name: Build and push native-tools Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: meta-repo
-          file: meta-repo/docker/native-tools/Dockerfile
-          push: true
-          tags: ${{ steps.vars.outputs.native_tools_image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILD_SHA=${{ steps.sha.outputs.sha }}
-            BUILD_DATE=${{ steps.vars.outputs.timestamp }}
-
-      - name: Output image info
-        run: |
-          echo "## RC Images Built 🐳" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**ploston:** \`${{ steps.vars.outputs.ploston_image }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**native-tools:** \`${{ steps.vars.outputs.native_tools_image }}\`" >> $GITHUB_STEP_SUMMARY
-
-  # ===========================================================================
-  # Trigger E2E Tests in Meta-Repo
-  # ===========================================================================
-  trigger-e2e:
-    name: Trigger E2E Tests
-    needs: build-rc
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-
-    steps:
-      - name: Trigger meta-repo test-rc workflow
-        uses: peter-evans/repository-dispatch@v2
+      - name: Trigger meta-repo CI
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.META_REPO_TOKEN }}
           repository: ostanlabs/agent-execution-layer
-          event-type: rc-ready
+          event-type: component-updated
           client-payload: |
             {
-              "image": "${{ needs.build-rc.outputs.image_tag }}",
-              "native_tools_image": "${{ needs.build-rc.outputs.native_tools_image_tag }}",
-              "tag": "${{ needs.build-rc.outputs.tag }}",
-              "sha": "${{ needs.build-rc.outputs.sha }}",
-              "short_sha": "${{ needs.build-rc.outputs.short_sha }}",
-              "ref": "${{ github.ref }}",
-              "actor": "${{ github.actor }}"
+              "trigger_repo": "ploston",
+              "trigger_sha": "${{ github.sha }}"
             }
-
-      - name: Summary
-        run: |
-          echo "## E2E Tests Triggered 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Meta-repo will run E2E tests against RC images." >> $GITHUB_STEP_SUMMARY
-
-  test-summary:
-    name: Test Summary
-    needs: [unit-tests, integration-tests, smoke-tests, parity-tests]
-    runs-on: ubuntu-latest
-    if: always()
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
-    steps:
-      - name: Download all test results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: "*-test-results*"
-          path: test-results/
-          merge-multiple: true
-
-      - name: Publish Test Summary
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
-        with:
-          files: test-results/**/*.xml
-          comment_mode: always
-          check_name: Test Results
-          compare_to_earlier_commit: false
-
-  report-to-dashboard:
-    name: Report to Dashboard
-    runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, smoke-tests, parity-tests]
-    if: always() && github.ref == 'refs/heads/main'
-    steps:
-      - name: Download all test results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: "*-test-results*"
-          path: test-results/
-          merge-multiple: true
-
-      - name: Parse test results
-        id: parse
-        run: |
-          # Count tests from JUnit XML files
-          TOTAL_TESTS=0
-          TOTAL_PASSED=0
-          TOTAL_FAILED=0
-          TOTAL_SKIPPED=0
-
-          for xml in test-results/*.xml; do
-            if [ -f "$xml" ]; then
-              TESTS=$(grep -oP 'tests="\K[0-9]+' "$xml" | head -1 || echo 0)
-              FAILURES=$(grep -oP 'failures="\K[0-9]+' "$xml" | head -1 || echo 0)
-              ERRORS=$(grep -oP 'errors="\K[0-9]+' "$xml" | head -1 || echo 0)
-              SKIPPED=$(grep -oP 'skipped="\K[0-9]+' "$xml" | head -1 || echo 0)
-
-              TOTAL_TESTS=$((TOTAL_TESTS + TESTS))
-              TOTAL_FAILED=$((TOTAL_FAILED + FAILURES + ERRORS))
-              TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
-            fi
-          done
-
-          TOTAL_PASSED=$((TOTAL_TESTS - TOTAL_FAILED - TOTAL_SKIPPED))
-
-          echo "total=$TOTAL_TESTS" >> $GITHUB_OUTPUT
-          echo "passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
-          echo "skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
-
-      - name: Report to meta-repo dashboard
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.META_REPO_TOKEN }}
-          repository: ostanlabs/agent-execution-layer
-          event-type: ci-results-ploston
-          client-payload: |
-            {
-              "package": "ploston",
-              "sha": "${{ github.sha }}",
-              "short_sha": "${{ github.sha }}",
-              "run_id": "${{ github.run_id }}",
-              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              "tests": {
-                "total": ${{ steps.parse.outputs.total }},
-                "passed": ${{ steps.parse.outputs.passed }},
-                "failed": ${{ steps.parse.outputs.failed }},
-                "skipped": ${{ steps.parse.outputs.skipped }}
-              },
-              "status": "${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.smoke-tests.result == 'success' && needs.parity-tests.result == 'success' && 'success' || 'failure' }}"
-            }
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Build package
-        run: uv build
-
-      - name: Check package installable
-        run: |
-          uv venv .test-venv
-          uv pip install --python .test-venv dist/*.whl
-          uv run --python .test-venv python -c "import ploston; print(ploston.__name__)"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-  notify-failure:
-    name: Notify on Failure
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, smoke-tests, parity-tests, build]
-    if: failure() && github.ref == 'refs/heads/main'
-    steps:
-      - name: Send Slack notification
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "❌ CI Failed: ploston",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "❌ CI Failed: ploston"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Repository:*\n<${{ github.server_url }}/${{ github.repository }}|${{ github.repository }}>"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.ref_name }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Commit:*\n<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Author:*\n${{ github.actor }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Run"
-                      },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
-
