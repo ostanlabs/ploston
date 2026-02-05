@@ -108,11 +108,14 @@ class MCPHTTPTestClient:
 
     def initialize(self) -> dict[str, Any]:
         """Send initialize request."""
-        return self.send("initialize", {
-            "protocolVersion": "2024-11-05",
-            "clientInfo": {"name": "mcp-http-test-client", "version": "1.0.0"},
-            "capabilities": {},
-        })
+        return self.send(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "clientInfo": {"name": "mcp-http-test-client", "version": "1.0.0"},
+                "capabilities": {},
+            },
+        )
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List available tools."""
@@ -127,7 +130,6 @@ class MCPHTTPTestClient:
         if "error" in response:
             raise RuntimeError(f"Error: {response['error']}")
         return response.get("result", {})
-
 
     def ping(self) -> bool:
         """Ping the server."""
@@ -287,9 +289,9 @@ Examples:
 
     if args.list_tools:
         tools = client.list_tools()
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Available Tools ({len(tools)})")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         for t in sorted(tools, key=lambda x: x["name"]):
             desc = t.get("description", "")[:50]
             print(f"  {t['name']:<40} {desc}")
@@ -299,18 +301,18 @@ Examples:
         tool_name, args_json = args.call
         arguments = json.loads(args_json)
         result = client.call_tool(tool_name, arguments)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Tool: {tool_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print_json(result)
 
     elif args.workflow:
         workflow_name, inputs_json = args.workflow
         inputs = json.loads(inputs_json)
         result = client.call_tool(f"workflow:{workflow_name}", inputs)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Workflow: {workflow_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print_json(result)
 
     else:
