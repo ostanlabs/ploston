@@ -3,10 +3,9 @@
 # =============================================================================
 # Build: docker build -t ostanlabs/native-tools:latest -f docker/native-tools/Dockerfile .
 # Run:   docker run -p 8081:8081 ostanlabs/native-tools:latest
-# =============================================================================
-# This Dockerfile is for CI/publishing - it installs from PyPI.
-# For local development, use the Dockerfile in the meta-repo which builds
-# from local source packages.
+#
+# Build with specific ploston-core version:
+#   docker build --build-arg PLOSTON_CORE_REF=main -t ostanlabs/native-tools:dev .
 # =============================================================================
 # Target size: <400MB
 # =============================================================================
@@ -16,19 +15,31 @@
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
+# Optional: ploston-core git ref (branch, tag, or commit SHA)
+# If not set, uses ploston-core from PyPI (default for releases)
+ARG PLOSTON_CORE_REF=""
+
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies (git needed if installing from git ref)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment and install packages from PyPI
-# ploston[native-tools] includes ploston-core and fastmcp
+# Copy package source (needed for local ploston install)
+COPY . ./
+
+# Create virtual environment and install packages
+# If PLOSTON_CORE_REF is set, install ploston-core from git first
 RUN python -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir "ploston[native-tools]"
+    if [ -n "$PLOSTON_CORE_REF" ]; then \
+      echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
+      pip install --no-cache-dir "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
+    fi && \
+    pip install --no-cache-dir ".[native-tools]"
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image

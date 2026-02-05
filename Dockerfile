@@ -3,6 +3,9 @@
 # =============================================================================
 # Build: docker build -t ostanlabs/ploston:latest .
 # Run:   docker run -p 8080:8080 ostanlabs/ploston:latest
+#
+# Build with specific ploston-core version:
+#   docker build --build-arg PLOSTON_CORE_REF=main -t ostanlabs/ploston:dev .
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -10,21 +13,30 @@
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
+# Optional: ploston-core git ref (branch, tag, or commit SHA)
+# If not set, uses ploston-core from PyPI (default for releases)
+ARG PLOSTON_CORE_REF=""
+
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies (git needed if installing from git ref)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package source
 COPY . ./
 
-# Create virtual environment and install packages using pip
-# Install from local source (which pulls ploston-core from PyPI)
+# Create virtual environment and install packages
+# If PLOSTON_CORE_REF is set, install ploston-core from git first
 RUN python -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
+    if [ -n "$PLOSTON_CORE_REF" ]; then \
+      echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
+      pip install --no-cache-dir "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
+    fi && \
     pip install --no-cache-dir .
 
 # -----------------------------------------------------------------------------
