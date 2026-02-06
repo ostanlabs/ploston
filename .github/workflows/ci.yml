@@ -116,7 +116,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.META_REPO_TOKEN }}
 
       - name: Build and push ploston image
         id: build-ploston
