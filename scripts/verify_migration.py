@@ -67,7 +67,8 @@ def check_server_functionality():
 def main():
     parser = argparse.ArgumentParser(description="Verify AEL to Ploston migration")
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show detailed output",
     )
