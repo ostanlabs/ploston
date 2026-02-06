@@ -35,12 +35,29 @@ COPY . ./
 
 # Create virtual environment and install packages using uv
 # Determine if PLOSTON_CORE_REF is a PyPI version or git ref
+# Includes retry logic for PyPI propagation delays
 RUN uv venv /app/.venv && \
     if [ -n "$PLOSTON_CORE_REF" ]; then \
       # Check if it looks like a version (contains digits and dots, possibly .dev)
       if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
         echo "Installing ploston-core from PyPI: $PLOSTON_CORE_REF" && \
-        uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; \
+        # Retry loop for PyPI propagation delays (up to 5 minutes)
+        MAX_ATTEMPTS=30 && \
+        ATTEMPT=1 && \
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do \
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Installing ploston-core==$PLOSTON_CORE_REF" && \
+          if uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; then \
+            echo "Successfully installed ploston-core==$PLOSTON_CORE_REF" && \
+            break; \
+          fi && \
+          if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then \
+            echo "Failed to install ploston-core==$PLOSTON_CORE_REF after $MAX_ATTEMPTS attempts" && \
+            exit 1; \
+          fi && \
+          echo "Package not yet available, waiting 10s before retry..." && \
+          sleep 10 && \
+          ATTEMPT=$((ATTEMPT + 1)); \
+        done; \
       else \
         echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
         uv pip install --python /app/.venv/bin/python "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
