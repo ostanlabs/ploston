@@ -1,7 +1,12 @@
 # =============================================================================
 # Ploston CI Workflow
 # =============================================================================
-# Runs unit tests locally, then triggers meta-repo for integration tests.
+# Runs lint and unit tests, builds Docker images, reports to meta-repo.
+#
+# Triggers:
+#   - Push to main: Full CI + trigger meta-repo integration tests
+#   - Pull request: Lint + unit tests only
+#   - workflow_dispatch: Triggered by meta-repo for coordinated builds
 # =============================================================================
 
 name: CI
@@ -10,6 +15,27 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      ploston_core_version:
+        description: 'ploston-core version to use (git ref, e.g., main, sha, or tag). Empty = latest PyPI'
+        required: false
+        default: ''
+      ploston_core_sha:
+        description: 'ploston-core commit SHA (for image tagging)'
+        required: false
+        default: ''
+      meta_run_id:
+        description: 'Meta-repo run ID (for callback)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   lint:
@@ -53,9 +79,122 @@ jobs:
           name: test-results
           path: junit-results.xml
 
-  trigger-integration:
+  # ===========================================================================
+  # Build Docker Images
+  # ===========================================================================
+  # Only runs on main branch or workflow_dispatch (meta-repo trigger)
+  # Builds both ploston and native-tools images
+  # ===========================================================================
+  build-images:
     needs: unit-tests
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      ploston_image: ${{ steps.build-ploston.outputs.image }}
+      native_tools_image: ${{ steps.build-native-tools.outputs.image }}
+      image_tag: ${{ steps.tags.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine image tags
+        id: tags
+        run: |
+          # Use ploston-core SHA if provided, otherwise use this repo's SHA
+          if [ -n "${{ inputs.ploston_core_sha }}" ]; then
+            TAG="dev-${{ inputs.ploston_core_sha }}"
+          else
+            TAG="dev-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "::notice::Image tag: $TAG"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ploston image
+        id: build-ploston
+        run: |
+          IMAGE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.tags.outputs.tag }}"
+
+          # Build with optional ploston-core git ref
+          # If PLOSTON_CORE_REF is empty, Dockerfile uses PyPI version
+          docker build \
+            --build-arg PLOSTON_CORE_REF="${{ inputs.ploston_core_version }}" \
+            --label "org.opencontainers.image.source=https://github.com/ostanlabs/ploston" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "com.ostanlabs.ploston-core.ref=${{ inputs.ploston_core_version }}" \
+            --label "com.ostanlabs.ploston-core.sha=${{ inputs.ploston_core_sha }}" \
+            -t $IMAGE \
+            -f Dockerfile .
+
+          docker push $IMAGE
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          echo "::notice::Built ploston image: $IMAGE"
+
+      - name: Build and push native-tools image
+        id: build-native-tools
+        run: |
+          IMAGE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.tags.outputs.tag }}"
+
+          # Build with optional ploston-core git ref
+          docker build \
+            --build-arg PLOSTON_CORE_REF="${{ inputs.ploston_core_version }}" \
+            --label "org.opencontainers.image.source=https://github.com/ostanlabs/ploston" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "com.ostanlabs.ploston-core.ref=${{ inputs.ploston_core_version }}" \
+            --label "com.ostanlabs.ploston-core.sha=${{ inputs.ploston_core_sha }}" \
+            -t $IMAGE \
+            -f docker/native-tools/Dockerfile .
+
+          docker push $IMAGE
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          echo "::notice::Built native-tools image: $IMAGE"
+
+  # ===========================================================================
+  # Report Results to Meta-Repo
+  # ===========================================================================
+  # Two different events depending on how this workflow was triggered:
+  # - workflow_dispatch (from meta-repo): Send package-ci-complete (just report back)
+  # - push to main (organic): Send component-updated (trigger full meta-repo CI)
+  # ===========================================================================
+
+  # Report completion when triggered by meta-repo (workflow_dispatch)
+  # This does NOT re-trigger meta-repo CI, just reports the build results
+  report-completion:
+    needs: [lint, unit-tests, build-images]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report build completion to meta-repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.META_REPO_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: package-ci-complete
+          client-payload: |
+            {
+              "package": "ploston",
+              "sha": "${{ github.sha }}",
+              "run_id": "${{ github.run_id }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "meta_run_id": "${{ inputs.meta_run_id }}",
+              "status": "${{ needs.build-images.result == 'success' && 'success' || 'failure' }}",
+              "images": {
+                "ploston": "${{ needs.build-images.outputs.ploston_image }}",
+                "native_tools": "${{ needs.build-images.outputs.native_tools_image }}"
+              },
+              "image_tag": "${{ needs.build-images.outputs.image_tag }}"
+            }
+
+  # Trigger meta-repo CI when this repo changes organically (push to main)
+  # This triggers the FULL meta-repo CI pipeline
+  trigger-meta-repo:
+    needs: [lint, unit-tests, build-images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-images.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger meta-repo CI
@@ -67,7 +206,12 @@ jobs:
           client-payload: |
             {
               "trigger_repo": "ploston",
-              "trigger_sha": "${{ github.sha }}"
+              "trigger_sha": "${{ github.sha }}",
+              "images": {
+                "ploston": "${{ needs.build-images.outputs.ploston_image }}",
+                "native_tools": "${{ needs.build-images.outputs.native_tools_image }}"
+              },
+              "image_tag": "${{ needs.build-images.outputs.image_tag }}"
             }
 
   report-to-dashboard:
