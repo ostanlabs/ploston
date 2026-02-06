@@ -140,7 +140,8 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.tags.outputs.tag }}"
           echo "Checking ploston-core version in $IMAGE..."
-          INSTALLED_VERSION=$(docker run --rm $IMAGE pip show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          # Override entrypoint to run pip instead of the server
+          INSTALLED_VERSION=$(docker run --rm --entrypoint pip $IMAGE show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
           echo "::notice::ploston image contains ploston-core==$INSTALLED_VERSION"
           echo "Installed ploston-core version: $INSTALLED_VERSION"
 
@@ -167,7 +168,8 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.tags.outputs.tag }}"
           echo "Checking ploston-core version in $IMAGE..."
-          INSTALLED_VERSION=$(docker run --rm $IMAGE pip show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          # Override entrypoint to run pip instead of the server
+          INSTALLED_VERSION=$(docker run --rm --entrypoint pip $IMAGE show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
           echo "::notice::native-tools image contains ploston-core==$INSTALLED_VERSION"
           echo "Installed ploston-core version: $INSTALLED_VERSION"
 
