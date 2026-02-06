@@ -140,8 +140,8 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.tags.outputs.tag }}"
           echo "Checking ploston-core version in $IMAGE..."
-          # Override entrypoint to run pip instead of the server
-          INSTALLED_VERSION=$(docker run --rm --entrypoint pip $IMAGE show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          # Use Python to check the version since pip isn't in the runtime image (uv builds don't include pip)
+          INSTALLED_VERSION=$(docker run --rm --entrypoint /app/.venv/bin/python $IMAGE -c "import ploston_core; print(ploston_core.__version__)" 2>/dev/null || echo "not installed")
           echo "::notice::ploston image contains ploston-core==$INSTALLED_VERSION"
           echo "Installed ploston-core version: $INSTALLED_VERSION"
 
@@ -168,8 +168,8 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.tags.outputs.tag }}"
           echo "Checking ploston-core version in $IMAGE..."
-          # Override entrypoint to run pip instead of the server
-          INSTALLED_VERSION=$(docker run --rm --entrypoint pip $IMAGE show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          # Use Python to check the version since pip isn't in the runtime image (uv builds don't include pip)
+          INSTALLED_VERSION=$(docker run --rm --entrypoint /app/.venv/bin/python $IMAGE -c "import ploston_core; print(ploston_core.__version__)" 2>/dev/null || echo "not installed")
           echo "::notice::native-tools image contains ploston-core==$INSTALLED_VERSION"
           echo "Installed ploston-core version: $INSTALLED_VERSION"
 

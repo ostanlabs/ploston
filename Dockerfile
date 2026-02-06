@@ -9,7 +9,7 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Builder - Install dependencies
+# Stage 1: Builder - Install dependencies using uv
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
@@ -27,25 +27,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv for fast package management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 # Copy package source
 COPY . ./
 
-# Create virtual environment and install packages
+# Create virtual environment and install packages using uv
 # Determine if PLOSTON_CORE_REF is a PyPI version or git ref
-RUN python -m venv /app/.venv && \
-    . /app/.venv/bin/activate && \
-    pip install --no-cache-dir --upgrade pip && \
+RUN uv venv /app/.venv && \
     if [ -n "$PLOSTON_CORE_REF" ]; then \
       # Check if it looks like a version (contains digits and dots, possibly .dev)
       if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
         echo "Installing ploston-core from PyPI: $PLOSTON_CORE_REF" && \
-        pip install --no-cache-dir "ploston-core==${PLOSTON_CORE_REF}"; \
+        uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; \
       else \
         echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
-        pip install --no-cache-dir "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
+        uv pip install --python /app/.venv/bin/python "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
       fi; \
     fi && \
-    pip install --no-cache-dir .
+    uv pip install --python /app/.venv/bin/python .
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
