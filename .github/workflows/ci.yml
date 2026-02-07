@@ -30,6 +30,11 @@ on:
         required: false
         default: ''
 
+# Prevent concurrent runs on the same branch/ref
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
@@ -40,6 +45,7 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -52,10 +58,12 @@ jobs:
 
       - name: Run lint
         run: make lint
+        # Note: `make lint` includes format check via `ruff format --check`
 
   unit-tests:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -69,7 +77,7 @@ jobs:
       - name: Run unit tests
         run: |
           uv sync --all-extras
-          uv run pytest tests/unit/ -v --tb=short --junitxml=junit-results.xml
+          make test
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -88,6 +96,7 @@ jobs:
     needs: unit-tests
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       ploston_image: ${{ steps.build-ploston.outputs.image }}
       native_tools_image: ${{ steps.build-native-tools.outputs.image }}
@@ -100,11 +109,12 @@ jobs:
         run: |
           # Use ploston-core SHA if provided, otherwise use this repo's SHA
           # Always use short SHA (7 chars) for consistency
+          # Tag format: sha-<7char_hash> (matches ci/image-config.env DEV_TAG_TEMPLATE)
           if [ -n "${{ inputs.ploston_core_sha }}" ]; then
             SHORT_SHA=$(echo "${{ inputs.ploston_core_sha }}" | cut -c1-7)
-            TAG="dev-${SHORT_SHA}"
+            TAG="sha-${SHORT_SHA}"
           else
-            TAG="dev-$(echo ${{ github.sha }} | cut -c1-7)"
+            TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "::notice::Image tag: $TAG"
@@ -136,15 +146,6 @@ jobs:
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "::notice::Built ploston image: $IMAGE"
 
-      - name: Verify ploston-core version in ploston image
-        run: |
-          IMAGE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.tags.outputs.tag }}"
-          echo "Checking ploston-core version in $IMAGE..."
-          # Use Python to check the version since pip isn't in the runtime image (uv builds don't include pip)
-          INSTALLED_VERSION=$(docker run --rm --entrypoint /app/.venv/bin/python $IMAGE -c "import ploston_core; print(ploston_core.__version__)" 2>/dev/null || echo "not installed")
-          echo "::notice::ploston image contains ploston-core==$INSTALLED_VERSION"
-          echo "Installed ploston-core version: $INSTALLED_VERSION"
-
       - name: Build and push native-tools image
         id: build-native-tools
         run: |
@@ -164,50 +165,16 @@ jobs:
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "::notice::Built native-tools image: $IMAGE"
 
-      - name: Verify ploston-core version in native-tools image
-        run: |
-          IMAGE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.tags.outputs.tag }}"
-          echo "Checking ploston-core version in $IMAGE..."
-          # Use Python to check the version since pip isn't in the runtime image (uv builds don't include pip)
-          INSTALLED_VERSION=$(docker run --rm --entrypoint /app/.venv/bin/python $IMAGE -c "import ploston_core; print(ploston_core.__version__)" 2>/dev/null || echo "not installed")
-          echo "::notice::native-tools image contains ploston-core==$INSTALLED_VERSION"
-          echo "Installed ploston-core version: $INSTALLED_VERSION"
 
   # ===========================================================================
   # Report Results to Meta-Repo
   # ===========================================================================
-  # Two different events depending on how this workflow was triggered:
-  # - workflow_dispatch (from meta-repo): Send package-ci-complete (just report back)
-  # - push to main (organic): Send component-updated (trigger full meta-repo CI)
+  # When triggered by workflow_dispatch (from meta-repo), we don't send any event
+  # back - the meta-repo uses `gh run watch` to wait for completion.
+  #
+  # When triggered by push to main (organic change), we send component-updated
+  # to trigger the full meta-repo CI pipeline.
   # ===========================================================================
-
-  # Report completion when triggered by meta-repo (workflow_dispatch)
-  # This does NOT re-trigger meta-repo CI, just reports the build results
-  report-completion:
-    needs: [lint, unit-tests, build-images]
-    if: always() && github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Report build completion to meta-repo
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.META_REPO_TOKEN }}
-          repository: ostanlabs/agent-execution-layer
-          event-type: package-ci-complete
-          client-payload: |
-            {
-              "package": "ploston",
-              "sha": "${{ github.sha }}",
-              "run_id": "${{ github.run_id }}",
-              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              "meta_run_id": "${{ inputs.meta_run_id }}",
-              "status": "${{ needs.build-images.result == 'success' && 'success' || 'failure' }}",
-              "images": {
-                "ploston": "${{ needs.build-images.outputs.ploston_image }}",
-                "native_tools": "${{ needs.build-images.outputs.native_tools_image }}"
-              },
-              "image_tag": "${{ needs.build-images.outputs.image_tag }}"
-            }
 
   # Trigger meta-repo CI when this repo changes organically (push to main)
   # This triggers the FULL meta-repo CI pipeline
@@ -215,6 +182,7 @@ jobs:
     needs: [lint, unit-tests, build-images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-images.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Trigger meta-repo CI
         uses: peter-evans/repository-dispatch@v3
@@ -236,6 +204,8 @@ jobs:
   report-to-dashboard:
     name: Report to Dashboard
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
     needs: [lint, unit-tests]
     if: always() && github.ref == 'refs/heads/main'
     steps:
