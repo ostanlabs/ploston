@@ -13,8 +13,10 @@
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
-# Optional: ploston-core git ref (branch, tag, or commit SHA)
-# If not set, uses ploston-core from PyPI (default for releases)
+# Optional: ploston-core version or git ref
+# - If looks like a version (e.g., 1.4.0.dev1738800000), install from PyPI
+# - If looks like a git ref (branch, tag, SHA), install from git
+# - If not set, uses ploston-core from PyPI (default for releases)
 ARG PLOSTON_CORE_REF=""
 
 WORKDIR /app
@@ -29,13 +31,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . ./
 
 # Create virtual environment and install packages
-# If PLOSTON_CORE_REF is set, install ploston-core from git first
+# Determine if PLOSTON_CORE_REF is a PyPI version or git ref
 RUN python -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
     if [ -n "$PLOSTON_CORE_REF" ]; then \
-      echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
-      pip install --no-cache-dir "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
+      # Check if it looks like a version (contains digits and dots, possibly .dev)
+      if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
+        echo "Installing ploston-core from PyPI: $PLOSTON_CORE_REF" && \
+        pip install --no-cache-dir "ploston-core==${PLOSTON_CORE_REF}"; \
+      else \
+        echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
+        pip install --no-cache-dir "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
+      fi; \
     fi && \
     pip install --no-cache-dir .
 
