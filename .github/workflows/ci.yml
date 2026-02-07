@@ -99,8 +99,10 @@ jobs:
         id: tags
         run: |
           # Use ploston-core SHA if provided, otherwise use this repo's SHA
+          # Always use short SHA (7 chars) for consistency
           if [ -n "${{ inputs.ploston_core_sha }}" ]; then
-            TAG="dev-${{ inputs.ploston_core_sha }}"
+            SHORT_SHA=$(echo "${{ inputs.ploston_core_sha }}" | cut -c1-7)
+            TAG="dev-${SHORT_SHA}"
           else
             TAG="dev-$(echo ${{ github.sha }} | cut -c1-7)"
           fi
@@ -134,6 +136,14 @@ jobs:
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "::notice::Built ploston image: $IMAGE"
 
+      - name: Verify ploston-core version in ploston image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.tags.outputs.tag }}"
+          echo "Checking ploston-core version in $IMAGE..."
+          INSTALLED_VERSION=$(docker run --rm $IMAGE pip show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          echo "::notice::ploston image contains ploston-core==$INSTALLED_VERSION"
+          echo "Installed ploston-core version: $INSTALLED_VERSION"
+
       - name: Build and push native-tools image
         id: build-native-tools
         run: |
@@ -152,6 +162,14 @@ jobs:
           docker push $IMAGE
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "::notice::Built native-tools image: $IMAGE"
+
+      - name: Verify ploston-core version in native-tools image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.tags.outputs.tag }}"
+          echo "Checking ploston-core version in $IMAGE..."
+          INSTALLED_VERSION=$(docker run --rm $IMAGE pip show ploston-core 2>/dev/null | grep "^Version:" | awk '{print $2}')
+          echo "::notice::native-tools image contains ploston-core==$INSTALLED_VERSION"
+          echo "Installed ploston-core version: $INSTALLED_VERSION"
 
   # ===========================================================================
   # Report Results to Meta-Repo
