@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
+
+jobs:
+  verify-tested:
+    runs-on: self-hosted
+    steps:
+      - name: Verify current commit is tested
+        run: |
+          # Get edge digest
+          EDGE_DIGEST=$(docker manifest inspect ghcr.io/ostanlabs/ploston-dev:edge 2>/dev/null | jq -r '.manifests[0].digest // .config.digest')
+
+          # Get current commit's image digest
+          CURRENT_DIGEST=$(docker manifest inspect ghcr.io/ostanlabs/ploston-dev:sha-${{ github.sha }} 2>/dev/null | jq -r '.manifests[0].digest // .config.digest')
+
+          if [[ "$EDGE_DIGEST" != "$CURRENT_DIGEST" ]]; then
+            echo "ERROR: Cannot release untested code"
+            echo "Edge digest: $EDGE_DIGEST"
+            echo "Current digest: $CURRENT_DIGEST"
+            exit 1
+          fi
+
+          echo "Verified: current commit matches edge (tested)"
+
+  release:
+    needs: verify-tested
+    runs-on: self-hosted
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build release images
+        run: make build-image IMAGE_TAG=${{ steps.version.outputs.version }}
+
+      - name: Push to production registry
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Push versioned tags
+          make push-image-prod IMAGE_TAG=$VERSION
+
+          # Also tag as latest
+          docker buildx imagetools create \
+            --tag ghcr.io/ostanlabs/ploston:latest \
+            ghcr.io/ostanlabs/ploston:$VERSION
+
+          docker buildx imagetools create \
+            --tag ghcr.io/ostanlabs/native-tools:latest \
+            ghcr.io/ostanlabs/native-tools:$VERSION
+
+  dispatch-release-published:
+    needs: release
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch release-published to meta-repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: release-published
+          client-payload: |
+            {
+              "repo": "ploston",
+              "version": "${{ needs.release.outputs.version }}",
+              "sha": "${{ github.sha }}"
+            }
+
+      - name: Notify Slack
+        if: success()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "🚀 ploston ${{ needs.release.outputs.version }} released to production"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+

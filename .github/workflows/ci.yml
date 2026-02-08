@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.repository }}-builds
+  cancel-in-progress: false
+
+env:
+  DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  wait-for-cascade:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Wait for active cascade to complete
+        run: |
+          while true; do
+            ACTIVE=$(curl -s $DASHBOARD_URL | jq -r '.cascade.active')
+            if [[ "$ACTIVE" != "true" ]]; then
+              echo "No active cascade, proceeding..."
+              break
+            fi
+            echo "Cascade in progress, waiting 30s..."
+            sleep 30
+          done
+
+  lint-and-test:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: make lint
+
+      - name: Unit tests
+        run: make test-unit
+
+  validate-core-version:
+    needs: [wait-for-cascade, lint-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    outputs:
+      core_version: ${{ steps.validate.outputs.core_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Validate core version
+        id: validate
+        run: |
+          LATEST_CORE=$(curl -s $DASHBOARD_URL | jq -r '.latest_available_core_version')
+          CURRENT_CORE=$(uv pip show ploston-core | grep Version | cut -d' ' -f2)
+          echo "core_version=$CURRENT_CORE" >> $GITHUB_OUTPUT
+
+          uv run python -c "
+          from packaging.version import Version
+          import sys
+          current, latest = sys.argv[1], sys.argv[2]
+          if Version(current) < Version(latest):
+              print(f'ERROR: Building with outdated core {current}, latest is {latest}')
+              sys.exit(1)
+          print(f'Core version {current} is valid (>= {latest})')
+          " "$CURRENT_CORE" "$LATEST_CORE"
+
+  build-and-push:
+    needs: validate-core-version
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build images
+        run: |
+          make build-image IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            CORE_VERSION=${{ needs.validate-core-version.outputs.core_version }}
+
+      - name: Push images
+        run: make push-image IMAGE_TAG=${{ env.IMAGE_TAG }}
+
+  dispatch-component-updated:
+    needs: [validate-core-version, build-and-push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch component-updated to meta-repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: component-updated
+          client-payload: |
+            {
+              "repo": "ploston",
+              "sha": "${{ github.sha }}",
+              "core_version": "${{ needs.validate-core-version.outputs.core_version }}",
+              "images": {
+                "ploston": "ghcr.io/ostanlabs/ploston-dev:${{ env.IMAGE_TAG }}",
+                "native_tools": "ghcr.io/ostanlabs/native-tools-dev:${{ env.IMAGE_TAG }}"
+              }
+            }
+

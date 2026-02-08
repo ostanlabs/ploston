@@ -1,0 +1,140 @@
+name: Rebuild
+
+on:
+  repository_dispatch:
+    types: [rebuild]
+
+concurrency:
+  group: ${{ github.repository }}-builds
+  cancel-in-progress: false
+
+env:
+  DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  rebuild:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+      error: ${{ steps.result.outputs.error }}
+      image_tag: ${{ env.IMAGE_TAG }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract payload
+        id: payload
+        run: |
+          echo "cascade_id=${{ github.event.client_payload.cascade_id }}" >> $GITHUB_OUTPUT
+          echo "core_version=${{ github.event.client_payload.core_version }}" >> $GITHUB_OUTPUT
+          echo "source=${{ github.event.client_payload.source }}" >> $GITHUB_OUTPUT
+
+      - name: Check for existing artifact (skip optimization)
+        id: skip-check
+        run: |
+          # Check if image exists with matching core_version label
+          EXISTING=$(docker manifest inspect ghcr.io/ostanlabs/ploston-dev:${{ env.IMAGE_TAG }} 2>/dev/null || echo "")
+          if [[ -n "$EXISTING" ]]; then
+            # TODO: Check core_version label matches
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Image already exists, skipping rebuild"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install uv
+        if: steps.skip-check.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        if: steps.skip-check.outputs.skip != 'true'
+        run: uv python install 3.12
+
+      - name: Update core dependency
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          SOURCE=${{ steps.payload.outputs.source }}
+          VERSION=${{ steps.payload.outputs.core_version }}
+          if [[ "$SOURCE" == "test-pypi" ]]; then
+            uv add ploston-core==$VERSION --index-url https://test.pypi.org/simple/
+          else
+            uv add ploston-core==$VERSION
+          fi
+
+      - name: Install dependencies
+        if: steps.skip-check.outputs.skip != 'true'
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        if: steps.skip-check.outputs.skip != 'true'
+        run: make lint
+
+      - name: Unit tests
+        if: steps.skip-check.outputs.skip != 'true'
+        run: make test-unit
+
+      - name: Log in to GHCR
+        if: steps.skip-check.outputs.skip != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build images
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          make build-image IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            CORE_VERSION=${{ steps.payload.outputs.core_version }}
+
+      - name: Push images
+        if: steps.skip-check.outputs.skip != 'true'
+        run: make push-image IMAGE_TAG=${{ env.IMAGE_TAG }}
+
+      - name: Verify cascade still active
+        id: verify
+        run: |
+          CURRENT_CASCADE=$(curl -s $DASHBOARD_URL | jq -r '.cascade.cascade_id')
+          if [[ "$CURRENT_CASCADE" != "${{ steps.payload.outputs.cascade_id }}" ]]; then
+            echo "Cascade was superseded, aborting silently"
+            echo "superseded=true" >> $GITHUB_OUTPUT
+          else
+            echo "superseded=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set result
+        id: result
+        if: steps.verify.outputs.superseded != 'true'
+        run: |
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "error=" >> $GITHUB_OUTPUT
+
+  dispatch-build-complete:
+    needs: rebuild
+    if: always() && needs.rebuild.outputs.status != ''
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch build-complete to meta-repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: build-complete
+          client-payload: |
+            {
+              "cascade_id": "${{ github.event.client_payload.cascade_id }}",
+              "repo": "ploston",
+              "sha": "${{ github.sha }}",
+              "core_version": "${{ github.event.client_payload.core_version }}",
+              "status": "${{ needs.rebuild.result == 'success' && 'success' || 'failure' }}",
+              "error": "${{ needs.rebuild.outputs.error || '' }}",
+              "artifact": {
+                "image_tag": "${{ needs.rebuild.outputs.image_tag }}",
+                "images": {
+                  "ploston": "ghcr.io/ostanlabs/ploston-dev:${{ needs.rebuild.outputs.image_tag }}",
+                  "native_tools": "ghcr.io/ostanlabs/native-tools-dev:${{ needs.rebuild.outputs.image_tag }}"
+                }
+              }
+            }
+
