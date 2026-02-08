@@ -46,6 +46,7 @@ RUN uv venv /app/.venv && \
           uv pip install --python /app/.venv/bin/python \
             --index-url https://test.pypi.org/simple \
             --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
             "ploston-core==${PLOSTON_CORE_REF}"; \
         else \
           echo "Installing ploston-core==$PLOSTON_CORE_REF from PyPI" && \
