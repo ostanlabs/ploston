@@ -6,7 +6,7 @@ on:
 
 jobs:
   promote:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       status: ${{ steps.result.outputs.status }}
@@ -58,7 +58,7 @@ jobs:
   dispatch-promote-complete:
     needs: promote
     if: always()
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Dispatch promote-complete to meta-repo
         uses: peter-evans/repository-dispatch@v3
