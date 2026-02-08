@@ -119,9 +119,12 @@ docker-build:
 	@echo "$(GREEN)Build complete!$(RESET)"
 
 ## Build Docker images for CI (ploston + native-tools)
+## Usage: make build-image IMAGE_TAG=xxx CORE_VERSION=1.4.0.dev123 CORE_SOURCE=test-pypi
 build-image:
 	@echo "$(CYAN)Building Docker images...$(RESET)"
-	docker build -t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) .
+	docker build -t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) \
+		--build-arg PLOSTON_CORE_REF=$(CORE_VERSION) \
+		--build-arg CORE_SOURCE=$(CORE_SOURCE) .
 	docker build -t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) -f docker/native-tools/Dockerfile .
 	@echo "$(GREEN)Build complete!$(RESET)"
 
