@@ -51,24 +51,24 @@ jobs:
         if: steps.skip-check.outputs.skip != 'true'
         run: uv python install 3.12
 
+      - name: Install dependencies
+        if: steps.skip-check.outputs.skip != 'true'
+        run: uv sync --all-extras --dev
+
       - name: Update core dependency
         if: steps.skip-check.outputs.skip != 'true'
         run: |
           SOURCE=${{ steps.payload.outputs.source }}
           VERSION=${{ steps.payload.outputs.core_version }}
-          uv cache clean
+          uv cache clean ploston-core
           if [[ "$SOURCE" == "test-pypi" ]]; then
-            uv add ploston-core==$VERSION \
+            uv pip install --python .venv/bin/python ploston-core==$VERSION \
               --index-url https://test.pypi.org/simple \
               --extra-index-url https://pypi.org/simple \
               --index-strategy unsafe-best-match
           else
-            uv add ploston-core==$VERSION
+            uv pip install --python .venv/bin/python ploston-core==$VERSION
           fi
-
-      - name: Install dependencies
-        if: steps.skip-check.outputs.skip != 'true'
-        run: uv sync --all-extras --dev
 
       - name: Lint
         if: steps.skip-check.outputs.skip != 'true'
