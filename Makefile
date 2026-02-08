@@ -66,7 +66,7 @@ install:
 ## Run all tests
 test:
 	@echo "$(CYAN)Running all tests...$(RESET)"
-	$(PYTEST) tests/ -v
+	$(PYTEST) tests/ -v --tb=short --junitxml=junit-results.xml
 
 ## Run unit tests only
 test-unit:
@@ -117,6 +117,20 @@ docker-build:
 	@echo "$(CYAN)Building Docker image $(IMAGE_NAME):$(IMAGE_TAG)...$(RESET)"
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 	@echo "$(GREEN)Build complete!$(RESET)"
+
+## Build Docker images for CI (ploston + native-tools)
+build-image:
+	@echo "$(CYAN)Building Docker images...$(RESET)"
+	docker build -t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) .
+	docker build -t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) -f docker/native-tools/Dockerfile .
+	@echo "$(GREEN)Build complete!$(RESET)"
+
+## Push Docker images to GHCR
+push-image:
+	@echo "$(CYAN)Pushing Docker images...$(RESET)"
+	docker push ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG)
+	docker push ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG)
+	@echo "$(GREEN)Push complete!$(RESET)"
 
 ## Run server in Docker
 docker-run:
