@@ -176,15 +176,26 @@ jobs:
   # to trigger the full meta-repo CI pipeline.
   # ===========================================================================
 
-  # Trigger meta-repo CI when this repo changes organically (push to main)
-  # This triggers the FULL meta-repo CI pipeline
+  # Trigger meta-repo test-and-promote when this repo changes organically (push to main)
   trigger-meta-repo:
     needs: [lint, unit-tests, build-images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-images.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Trigger meta-repo CI
+      - name: Get ploston-core version from image
+        id: core-version
+        run: |
+          # Extract ploston-core version from the built image
+          # The version is stored as a label during build
+          CORE_VERSION=$(docker inspect --format='{{index .Config.Labels "com.ostanlabs.ploston-core.version"}}' ${{ needs.build-images.outputs.ploston_image }} 2>/dev/null || echo "unknown")
+          if [ "$CORE_VERSION" == "unknown" ] || [ -z "$CORE_VERSION" ]; then
+            # Fallback: get from pyproject.toml dependency
+            CORE_VERSION="latest"
+          fi
+          echo "version=$CORE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Dispatch component-updated to meta-repo
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.META_REPO_TOKEN }}
@@ -192,13 +203,13 @@ jobs:
           event-type: component-updated
           client-payload: |
             {
-              "trigger_repo": "ploston",
-              "trigger_sha": "${{ github.sha }}",
+              "repo": "ploston",
+              "sha": "${{ github.sha }}",
+              "core_version": "${{ steps.core-version.outputs.version }}",
               "images": {
                 "ploston": "${{ needs.build-images.outputs.ploston_image }}",
                 "native_tools": "${{ needs.build-images.outputs.native_tools_image }}"
-              },
-              "image_tag": "${{ needs.build-images.outputs.image_tag }}"
+              }
             }
 
   report-to-dashboard:

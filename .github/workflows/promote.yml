@@ -1,14 +1,8 @@
 # =============================================================================
-# Promote - Release RC to Production
+# Promote - Retag dev images to edge
 # =============================================================================
-# Promotes RC images to production tags.
-#
-# Triggers:
-#   - repository_dispatch (rc-tests-passed): Auto-promote after E2E tests pass
-#     → Tags: :dev-<commit_hash>, :dev (preserves history)
-#   - GitHub Release: Versioned release
-#     → Tags: :v1.0.0, :1.0, :1, :latest
-#   - Manual: Specify RC image and target tags
+# Triggered by meta-repo after integration tests pass.
+# Promotes dev images (sha-xxx) to edge tag.
 #
 # Both ploston and native-tools images are promoted together.
 # =============================================================================
@@ -17,218 +11,111 @@ name: Promote
 
 on:
   repository_dispatch:
-    types: [rc-tests-passed]
-
-  release:
-    types: [published]
+    types: [promote]
 
   workflow_dispatch:
     inputs:
-      image:
-        description: 'RC image to promote (e.g., ghcr.io/ostanlabs/ploston-dev:sha-abc1234)'
+      source_tag:
+        description: 'Source tag to promote (e.g., sha-abc1234)'
         required: true
-      tags:
-        description: 'Comma-separated tags to apply (e.g., latest,main)'
-        required: true
-        default: 'latest,main'
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   promote:
-    name: Promote to Production
+    name: Promote to Edge
     runs-on: ubuntu-latest
-    outputs:
-      short_sha: ${{ steps.params.outputs.short_sha }}
-      tags: ${{ steps.params.outputs.tags }}
-
+    timeout-minutes: 10
     steps:
-      - name: Fetch image config from meta-repo
-        id: config
-        env:
-          GH_TOKEN: ${{ secrets.META_REPO_TOKEN }}
-        run: |
-          # Fetch the single source of truth for image naming from private meta-repo
-          # Uses GitHub API since raw.githubusercontent.com doesn't work for private repos
-          curl -sL \
-            -H "Authorization: token ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github.v3.raw" \
-            "https://api.github.com/repos/ostanlabs/agent-execution-layer/contents/ci/image-config.env?ref=main" \
-            -o image-config.env
-
-          # Verify file was fetched successfully
-          if [ ! -s image-config.env ]; then
-            echo "Error: Failed to fetch image-config.env from meta-repo"
-            exit 1
-          fi
-
-          source image-config.env
-
-          # Export config values using actual variable names from image-config.env
-          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
-          # Dev stage image names (for dev promotion)
-          echo "ploston_dev_image=${PLOSTON_DEV_IMAGE}" >> $GITHUB_OUTPUT
-          echo "native_tools_dev_image=${NATIVE_TOOLS_DEV_IMAGE}" >> $GITHUB_OUTPUT
-          # Release stage image names
-          echo "ploston_release_image=${PLOSTON_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
-          echo "native_tools_release_image=${NATIVE_TOOLS_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
-          # Tag templates
-          echo "dev_tag_template=${DEV_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
-          echo "dev_edge_tag=${DEV_EDGE_TAG}" >> $GITHUB_OUTPUT
-          echo "release_tag_template=${RELEASE_TAG_TEMPLATE}" >> $GITHUB_OUTPUT
-          echo "release_latest_tag=${RELEASE_LATEST_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Determine promotion parameters
-        id: params
-        env:
-          DEV_TAG_TEMPLATE: ${{ steps.config.outputs.dev_tag_template }}
-          DEV_EDGE_TAG: ${{ steps.config.outputs.dev_edge_tag }}
-          RELEASE_TAG_TEMPLATE: ${{ steps.config.outputs.release_tag_template }}
-          RELEASE_LATEST_TAG: ${{ steps.config.outputs.release_latest_tag }}
-          REGISTRY: ${{ steps.config.outputs.registry }}
-          PLOSTON_DEV_IMAGE: ${{ steps.config.outputs.ploston_dev_image }}
-          NATIVE_TOOLS_DEV_IMAGE: ${{ steps.config.outputs.native_tools_dev_image }}
-          PLOSTON_RELEASE_IMAGE: ${{ steps.config.outputs.ploston_release_image }}
-          NATIVE_TOOLS_RELEASE_IMAGE: ${{ steps.config.outputs.native_tools_release_image }}
-        run: |
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            SHA="${{ github.event.client_payload.sha }}"
-            SHORT_SHA="${SHA:0:7}"
-            echo "image=${{ github.event.client_payload.image }}" >> $GITHUB_OUTPUT
-            echo "native_tools_image=${{ github.event.client_payload.native_tools_image }}" >> $GITHUB_OUTPUT
-            # Use tag template from config (replace {short_sha} placeholder)
-            DEV_TAG="${DEV_TAG_TEMPLATE//\{short_sha\}/$SHORT_SHA}"
-            echo "tags=${DEV_TAG},${DEV_EDGE_TAG}" >> $GITHUB_OUTPUT
-            echo "sha=$SHA" >> $GITHUB_OUTPUT
-            echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-            echo "source=e2e-passed" >> $GITHUB_OUTPUT
-            # Store full image refs for promotion (using dev stage image names)
-            echo "ploston_full=${REGISTRY}/${PLOSTON_DEV_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${NATIVE_TOOLS_DEV_IMAGE}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
-            MAJOR=$(echo $VERSION | cut -d. -f1)
-            MINOR=$(echo $VERSION | cut -d. -f2)
-            # Use tag templates from config
-            echo "tags=${VERSION},${MAJOR}.${MINOR},${MAJOR},${RELEASE_LATEST_TAG}" >> $GITHUB_OUTPUT
-            echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
-            echo "source=release" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            # Use release stage image names
-            echo "ploston_full=${REGISTRY}/${PLOSTON_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${NATIVE_TOOLS_RELEASE_IMAGE}" >> $GITHUB_OUTPUT
-          else
-            echo "image=${{ github.event.inputs.image }}" >> $GITHUB_OUTPUT
-            echo "tags=${{ github.event.inputs.tags }}" >> $GITHUB_OUTPUT
-            echo "sha=manual" >> $GITHUB_OUTPUT
-            echo "source=manual" >> $GITHUB_OUTPUT
-            # Default to dev image names for manual promotion
-            echo "ploston_full=${REGISTRY}/${PLOSTON_DEV_IMAGE}" >> $GITHUB_OUTPUT
-            echo "native_tools_full=${REGISTRY}/${NATIVE_TOOLS_DEV_IMAGE}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # For repository_dispatch and manual: re-tag existing RC image
-      - name: Pull and re-tag RC image (ploston)
-        if: github.event_name != 'release'
+      - name: Determine source tag
+        id: params
         run: |
-          docker pull ${{ steps.params.outputs.image }}
-          IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
-          for tag in "${TAGS[@]}"; do
-            docker tag ${{ steps.params.outputs.image }} ${{ steps.params.outputs.ploston_full }}:${tag}
-            docker push ${{ steps.params.outputs.ploston_full }}:${tag}
-            echo "Pushed ${{ steps.params.outputs.ploston_full }}:${tag}"
-          done
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            SOURCE_TAG="${{ github.event.client_payload.source_tag }}"
+          else
+            SOURCE_TAG="${{ github.event.inputs.source_tag }}"
+          fi
+          echo "source_tag=$SOURCE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Pull and re-tag RC image (native-tools)
-        if: github.event_name == 'repository_dispatch' && steps.params.outputs.native_tools_image != ''
+      - name: Promote ploston image to edge
         run: |
-          docker pull ${{ steps.params.outputs.native_tools_image }}
-          IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
-          for tag in "${TAGS[@]}"; do
-            docker tag ${{ steps.params.outputs.native_tools_image }} ${{ steps.params.outputs.native_tools_full }}:${tag}
-            docker push ${{ steps.params.outputs.native_tools_full }}:${tag}
-            echo "Pushed ${{ steps.params.outputs.native_tools_full }}:${tag}"
-          done
+          SOURCE="${{ env.REGISTRY }}/ostanlabs/ploston-dev:${{ steps.params.outputs.source_tag }}"
+          TARGET="${{ env.REGISTRY }}/ostanlabs/ploston-dev:edge"
 
-      # For releases: checkout and build fresh with version tags
-      - name: Checkout meta-repo
-        if: github.event_name == 'release'
-        uses: actions/checkout@v4
-        with:
-          repository: ostanlabs/agent-execution-layer
-          submodules: recursive
-          token: ${{ secrets.META_REPO_TOKEN }}
+          docker pull $SOURCE
+          docker tag $SOURCE $TARGET
+          docker push $TARGET
+          echo "::notice::Promoted $SOURCE → $TARGET"
 
-      - name: Set up Docker Buildx
-        if: github.event_name == 'release'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push release images
-        if: github.event_name == 'release'
+      - name: Promote native-tools image to edge
         run: |
-          IFS=',' read -ra TAGS <<< "${{ steps.params.outputs.tags }}"
-          TAG_ARGS=""
-          for tag in "${TAGS[@]}"; do
-            TAG_ARGS="$TAG_ARGS -t ${{ steps.params.outputs.ploston_full }}:${tag}"
-          done
-          docker buildx build --push $TAG_ARGS .
+          SOURCE="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:${{ steps.params.outputs.source_tag }}"
+          TARGET="${{ env.REGISTRY }}/ostanlabs/native-tools-dev:edge"
+
+          docker pull $SOURCE
+          docker tag $SOURCE $TARGET
+          docker push $TARGET
+          echo "::notice::Promoted $SOURCE → $TARGET"
 
       - name: Summary
         run: |
-          echo "## 🎉 Promoted!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 Promoted to Edge!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Source:** ${{ steps.params.outputs.source }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** ${{ steps.params.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ steps.params.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Tag:** ${{ steps.params.outputs.source_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Tag:** edge" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images Promoted:" >> $GITHUB_STEP_SUMMARY
+          echo "- ploston-dev:${{ steps.params.outputs.source_tag }} → ploston-dev:edge" >> $GITHUB_STEP_SUMMARY
+          echo "- native-tools-dev:${{ steps.params.outputs.source_tag }} → native-tools-dev:edge" >> $GITHUB_STEP_SUMMARY
 
-  notify-dashboard-dev:
-    name: Notify Dashboard (Dev)
-    if: github.event_name == 'repository_dispatch'
+  report-success:
+    name: Report Success to Meta-Repo
     needs: [promote]
+    if: success() && github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     steps:
-      - name: Trigger dashboard refresh for dev image
+      - name: Dispatch promote-complete (success)
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.META_REPO_TOKEN }}
           repository: ostanlabs/agent-execution-layer
-          event-type: dev-promoted
+          event-type: promote-complete
           client-payload: |
             {
-              "package": "ploston",
-              "tag": "dev-${{ needs.promote.outputs.short_sha }}",
-              "sha": "${{ github.event.client_payload.sha }}",
-              "run_id": "${{ github.run_id }}",
-              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "repo": "ploston",
+              "status": "success",
+              "error": null,
+              "cascade_id": "${{ github.event.client_payload.cascade_id }}"
             }
 
-  notify-dashboard-release:
-    name: Notify Dashboard (Release)
-    if: github.event_name == 'release'
+  report-failure:
+    name: Report Failure to Meta-Repo
     needs: [promote]
+    if: failure() && github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     steps:
-      - name: Trigger dashboard refresh
+      - name: Dispatch promote-complete (failure)
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.META_REPO_TOKEN }}
           repository: ostanlabs/agent-execution-layer
-          event-type: release-published
+          event-type: promote-complete
           client-payload: |
             {
-              "package": "ploston",
-              "version": "${{ github.event.release.tag_name }}",
-              "release_url": "${{ github.event.release.html_url }}",
-              "run_id": "${{ github.run_id }}",
-              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "repo": "ploston",
+              "status": "failure",
+              "error": "Promotion failed - check workflow run for details",
+              "cascade_id": "${{ github.event.client_payload.cascade_id }}"
             }
 
   notify-slack:
@@ -246,13 +133,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "✅ Deployed: ploston ${{ github.event_name == 'release' && github.event.release.tag_name || 'latest' }}",
+              "text": "✅ Promoted: ploston to edge",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "✅ Deployed: ploston"
+                    "text": "✅ Promoted: ploston"
                   }
                 },
                 {
@@ -260,11 +147,11 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "*Version:*\n${{ github.event_name == 'release' && github.event.release.tag_name || 'latest' }}"
+                      "text": "*Target:*\nedge"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Registry:*\n<https://ghcr.io/ostanlabs/ploston|GHCR>"
+                      "text": "*Registry:*\n<https://ghcr.io/ostanlabs/ploston-dev|GHCR>"
                     }
                   ]
                 },
@@ -292,13 +179,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "❌ Deploy Failed: ploston",
+              "text": "❌ Promotion Failed: ploston",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "❌ Deploy Failed: ploston"
+                    "text": "❌ Promotion Failed: ploston"
                   }
                 },
                 {
