@@ -1,0 +1,76 @@
+name: Promote
+
+on:
+  repository_dispatch:
+    types: [promote]
+
+jobs:
+  promote:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+      error: ${{ steps.result.outputs.error }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract payload
+        id: payload
+        run: |
+          echo "source_tag=${{ github.event.client_payload.source_tag }}" >> $GITHUB_OUTPUT
+          echo "cascade_id=${{ github.event.client_payload.cascade_id }}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote images to edge
+        id: promote
+        run: |
+          SOURCE_TAG=${{ steps.payload.outputs.source_tag }}
+
+          # Retag ploston-dev to edge
+          docker buildx imagetools create \
+            --tag ghcr.io/ostanlabs/ploston-dev:edge \
+            ghcr.io/ostanlabs/ploston-dev:$SOURCE_TAG
+
+          # Retag native-tools-dev to edge
+          docker buildx imagetools create \
+            --tag ghcr.io/ostanlabs/native-tools-dev:edge \
+            ghcr.io/ostanlabs/native-tools-dev:$SOURCE_TAG
+
+          echo "Promoted $SOURCE_TAG to edge"
+
+      - name: Set result
+        id: result
+        run: |
+          if [[ "${{ steps.promote.outcome }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "error=" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "error=Promotion failed" >> $GITHUB_OUTPUT
+          fi
+
+  dispatch-promote-complete:
+    needs: promote
+    if: always()
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch promote-complete to meta-repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: ostanlabs/agent-execution-layer
+          event-type: promote-complete
+          client-payload: |
+            {
+              "repo": "ploston",
+              "status": "${{ needs.promote.result == 'success' && 'success' || 'failure' }}",
+              "error": "${{ needs.promote.outputs.error || '' }}",
+              "cascade_id": "${{ github.event.client_payload.cascade_id }}"
+            }
+
