@@ -90,7 +90,8 @@ jobs:
         if: steps.skip-check.outputs.skip != 'true'
         run: |
           make build-image IMAGE_TAG=${{ env.IMAGE_TAG }} \
-            CORE_VERSION=${{ steps.payload.outputs.core_version }}
+            CORE_VERSION=${{ steps.payload.outputs.core_version }} \
+            CORE_SOURCE=${{ steps.payload.outputs.source }}
 
       - name: Push images
         if: steps.skip-check.outputs.skip != 'true'
