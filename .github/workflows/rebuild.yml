@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [rebuild]
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
   group: ${{ github.repository }}-builds
   cancel-in-progress: false
