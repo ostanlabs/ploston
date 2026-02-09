@@ -42,15 +42,6 @@ RUN uv venv /app/.venv && \
       # Check if it looks like a version (contains digits and dots, possibly .dev)
       if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
         if [ "$CORE_SOURCE" = "test-pypi" ]; then \
-          echo "=== CDN Debug Info (Docker) ===" && \
-          echo "DNS resolution for test.pypi.org:" && \
-          (cat /etc/resolv.conf || echo "No resolv.conf") && \
-          (getent hosts test.pypi.org || echo "getent not available") && \
-          echo "DNS resolution for test-files.pythonhosted.org:" && \
-          (getent hosts test-files.pythonhosted.org || echo "getent not available") && \
-          echo "HTTP headers from test.pypi.org:" && \
-          (curl -sI https://test.pypi.org/simple/ploston-core/ | grep -iE "x-served-by|x-cache|cf-ray|server|via" || echo "No CDN headers found") && \
-          echo "=== End CDN Debug Info ===" && \
           echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI (no-deps)" && \
           uv pip install --python /app/.venv/bin/python \
             --index-url https://test.pypi.org/simple \
