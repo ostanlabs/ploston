@@ -125,7 +125,10 @@ build-image:
 	docker build -t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) \
 		--build-arg PLOSTON_CORE_REF=$(CORE_VERSION) \
 		--build-arg CORE_SOURCE=$(CORE_SOURCE) .
-	docker build -t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) -f docker/native-tools/Dockerfile .
+	docker build -t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) \
+		--build-arg PLOSTON_CORE_REF=$(CORE_VERSION) \
+		--build-arg CORE_SOURCE=$(CORE_SOURCE) \
+		-f docker/native-tools/Dockerfile .
 	@echo "$(GREEN)Build complete!$(RESET)"
 
 ## Push Docker images to GHCR

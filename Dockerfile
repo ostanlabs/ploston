@@ -42,11 +42,12 @@ RUN uv venv /app/.venv && \
       # Check if it looks like a version (contains digits and dots, possibly .dev)
       if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
         if [ "$CORE_SOURCE" = "test-pypi" ]; then \
-          echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI" && \
+          echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI (no-deps)" && \
           uv pip install --python /app/.venv/bin/python \
             --index-url https://test.pypi.org/simple \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
+            --no-deps \
             "ploston-core==${PLOSTON_CORE_REF}"; \
         else \
           echo "Installing ploston-core==$PLOSTON_CORE_REF from PyPI" && \
