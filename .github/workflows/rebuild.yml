@@ -68,28 +68,12 @@ jobs:
           echo "Installing ploston-core==$VERSION from $SOURCE..."
           uv cache clean ploston-core
           if [[ "$SOURCE" == "test-pypi" ]]; then
-            # Pre-install dependencies from PyPI to avoid Test PyPI's broken packages
-            uv pip install --python .venv/bin/python "fastapi>=0.115.0" "pydantic>=2.0.0"
-            # Now install ploston-core from Test PyPI with retry for CDN propagation
-            MAX_RETRIES=6
-            RETRY_DELAY=10
-            for i in $(seq 1 $MAX_RETRIES); do
-              echo "Attempt $i/$MAX_RETRIES: Installing ploston-core==$VERSION from Test PyPI..."
-              if uv pip install --python .venv/bin/python ploston-core==$VERSION \
-                --index-url https://test.pypi.org/simple \
-                --extra-index-url https://pypi.org/simple \
-                --index-strategy unsafe-best-match \
-                --refresh 2>&1; then
-                echo "Successfully installed ploston-core==$VERSION"
-                break
-              fi
-              if [[ $i -eq $MAX_RETRIES ]]; then
-                echo "Failed to install ploston-core==$VERSION after $MAX_RETRIES attempts"
-                exit 1
-              fi
-              echo "Package not available yet, waiting ${RETRY_DELAY}s before retry..."
-              sleep $RETRY_DELAY
-            done
+            # Use --no-deps to avoid dependency resolution issues with mixed indexes
+            # Dependencies are already installed by uv sync
+            uv pip install --python .venv/bin/python ploston-core==$VERSION \
+              --index-url https://test.pypi.org/simple \
+              --no-deps \
+              --refresh
           else
             uv pip install --python .venv/bin/python ploston-core==$VERSION
           fi
