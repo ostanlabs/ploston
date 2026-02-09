@@ -69,6 +69,16 @@ jobs:
           uv cache clean ploston-core
 
           if [[ "$SOURCE" == "test-pypi" ]]; then
+            # Debug: Show CDN edge node info for Test PyPI
+            echo "=== CDN Debug Info (Host) ==="
+            echo "DNS resolution for test.pypi.org:"
+            dig +short test.pypi.org || nslookup test.pypi.org || echo "dig/nslookup not available"
+            echo "DNS resolution for test-files.pythonhosted.org:"
+            dig +short test-files.pythonhosted.org || nslookup test-files.pythonhosted.org || echo "dig/nslookup not available"
+            echo "HTTP headers from test.pypi.org:"
+            curl -sI https://test.pypi.org/simple/ploston-core/ | grep -iE "x-served-by|x-cache|cf-ray|server|via" || echo "No CDN headers found"
+            echo "=== End CDN Debug Info ==="
+
             # Retry loop for Test PyPI CDN propagation delays
             # Different CDN edge nodes may have different cache states
             MAX_ATTEMPTS=5
