@@ -10,6 +10,10 @@ concurrency:
   group: ${{ github.repository }}-builds
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
   IMAGE_TAG: sha-${{ github.sha }}
