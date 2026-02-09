@@ -123,49 +123,26 @@ jobs:
         if: steps.skip-check.outputs.skip != 'true'
         run: make push-image IMAGE_TAG=${{ env.IMAGE_TAG }}
 
-      - name: Verify cascade still active
-        id: verify
-        run: |
-          CURRENT_CASCADE=$(curl -s $DASHBOARD_URL | jq -r '.cascade.cascade_id')
-          if [[ "$CURRENT_CASCADE" != "${{ steps.payload.outputs.cascade_id }}" ]]; then
-            echo "Cascade was superseded, aborting silently"
-            echo "superseded=true" >> $GITHUB_OUTPUT
-          else
-            echo "superseded=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Set result
         id: result
-        if: steps.verify.outputs.superseded != 'true'
         run: |
           echo "status=success" >> $GITHUB_OUTPUT
           echo "error=" >> $GITHUB_OUTPUT
 
-  dispatch-build-complete:
+  update-dashboard:
     needs: rebuild
-    if: always() && needs.rebuild.outputs.status != ''
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch build-complete to meta-repo
-        uses: peter-evans/repository-dispatch@v3
+      - name: Update dashboard
+        uses: ostanlabs/ploston-core/.github/actions/update-dashboard@main
         with:
+          repo: ploston
+          cascade_id: ${{ github.event.client_payload.cascade_id }}
+          sha: ${{ github.sha }}
+          core_version: ${{ github.event.client_payload.core_version }}
+          status: ${{ needs.rebuild.result == 'success' && 'success' || 'failure' }}
+          error: ${{ needs.rebuild.outputs.error || '' }}
+          artifact_image_tag: ${{ needs.rebuild.outputs.image_tag || '' }}
+          gist_id: ${{ secrets.DASHBOARD_GIST_ID }}
           token: ${{ secrets.META_REPO_TOKEN }}
-          repository: ostanlabs/agent-execution-layer
-          event-type: build-complete
-          client-payload: |
-            {
-              "cascade_id": "${{ github.event.client_payload.cascade_id }}",
-              "repo": "ploston",
-              "sha": "${{ github.sha }}",
-              "core_version": "${{ github.event.client_payload.core_version }}",
-              "status": "${{ needs.rebuild.result == 'success' && 'success' || 'failure' }}",
-              "error": "${{ needs.rebuild.outputs.error || '' }}",
-              "artifact": {
-                "image_tag": "${{ needs.rebuild.outputs.image_tag }}",
-                "images": {
-                  "ploston": "ghcr.io/ostanlabs/ploston-dev:${{ needs.rebuild.outputs.image_tag }}",
-                  "native_tools": "ghcr.io/ostanlabs/native-tools-dev:${{ needs.rebuild.outputs.image_tag }}"
-                }
-              }
-            }
-
