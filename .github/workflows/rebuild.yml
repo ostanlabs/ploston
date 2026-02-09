@@ -121,7 +121,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.META_REPO_TOKEN }}
 
       - name: Build images
         if: steps.skip-check.outputs.skip != 'true'
