@@ -55,22 +55,72 @@ jobs:
             echo "error=Promotion failed" >> $GITHUB_OUTPUT
           fi
 
-  dispatch-promote-complete:
+  update-dashboard:
     needs: promote
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch promote-complete to meta-repo
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.META_REPO_TOKEN }}
-          repository: ostanlabs/agent-execution-layer
-          event-type: promote-complete
-          client-payload: |
-            {
-              "repo": "ploston",
-              "status": "${{ needs.promote.result == 'success' && 'success' || 'failure' }}",
-              "error": "${{ needs.promote.outputs.error || '' }}",
-              "cascade_id": "${{ github.event.client_payload.cascade_id }}"
-            }
+      - name: Update dashboard with promotion result
+        env:
+          GITHUB_TOKEN: ${{ secrets.META_REPO_TOKEN }}
+          GIST_API_URL: https://api.github.com/gists/${{ secrets.DASHBOARD_GIST_ID }}
+        run: |
+          set -e
+
+          REPO="ploston"
+          CASCADE_ID="${{ github.event.client_payload.cascade_id }}"
+          STATUS="${{ needs.promote.result == 'success' && 'success' || 'failure' }}"
+          ERROR="${{ needs.promote.outputs.error || '' }}"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Updating dashboard promotions for $REPO (cascade: $CASCADE_ID, status: $STATUS)"
+
+          # Fetch current dashboard
+          RESPONSE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$GIST_API_URL")
+          CURRENT=$(echo "$RESPONSE" | jq -r '.files["dashboard.json"].content')
+
+          if [[ -z "$CURRENT" || "$CURRENT" == "null" ]]; then
+            echo "ERROR: Could not extract dashboard content"
+            exit 1
+          fi
+
+          # Verify cascade_id matches (skip update if superseded)
+          CURRENT_CASCADE=$(echo "$CURRENT" | jq -r '.cascade.cascade_id')
+          echo "Current cascade: $CURRENT_CASCADE, received: $CASCADE_ID"
+          if [[ "$CURRENT_CASCADE" != "$CASCADE_ID" ]]; then
+            echo "Cascade was superseded ($CURRENT_CASCADE != $CASCADE_ID), skipping update"
+            exit 0
+          fi
+
+          # Apply update to promotions section
+          UPDATED=$(echo "$CURRENT" | jq \
+            --arg repo "$REPO" \
+            --arg cascade_id "$CASCADE_ID" \
+            --arg status "$STATUS" \
+            --arg error "$ERROR" \
+            --arg now "$NOW" \
+            '.cascade.promotions[$repo] = {
+              "cascade_id": $cascade_id,
+              "status": $status,
+              "error": $error,
+              "completed_at": $now
+            }')
+
+          # Update gist
+          echo "Updating gist..."
+          UPDATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH "$GIST_API_URL" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\": {\"dashboard.json\": {\"content\": $(echo "$UPDATED" | jq -Rs .)}}}")
+
+          UPDATE_STATUS=$(echo "$UPDATE_RESPONSE" | tail -1)
+          echo "Update HTTP status: $UPDATE_STATUS"
+
+          if [[ "$UPDATE_STATUS" == "200" ]]; then
+            echo "Dashboard updated successfully for $REPO promotion"
+          else
+            echo "ERROR: Failed to update dashboard: HTTP $UPDATE_STATUS"
+            echo "Response: $(echo "$UPDATE_RESPONSE" | sed '$d')"
+            exit 1
+          fi
 
