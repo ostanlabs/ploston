@@ -94,7 +94,7 @@ def mock_workflow_registry() -> MagicMock:
     registry = MagicMock(spec=WorkflowRegistry)
     registry.get_for_mcp_exposure.return_value = [
         {
-            "name": "workflow:simple-http",
+            "name": "workflow_simple-http",
             "description": "Simple HTTP workflow",
             "inputSchema": {
                 "type": "object",
@@ -105,7 +105,7 @@ def mock_workflow_registry() -> MagicMock:
             },
         },
         {
-            "name": "workflow:data-pipeline",
+            "name": "workflow_data-pipeline",
             "description": "Data processing pipeline",
             "inputSchema": {
                 "type": "object",
@@ -266,10 +266,10 @@ class TestToolsList:
         tools = response["result"]["tools"]
         tool_names = [t["name"] for t in tools]
 
-        # Workflows should be prefixed with "workflow:"
-        workflow_tools = [n for n in tool_names if n.startswith("workflow:")]
+        # Workflows should be prefixed with "workflow_"
+        workflow_tools = [n for n in tool_names if n.startswith("workflow_")]
         assert len(workflow_tools) >= 1
-        assert "workflow:simple-http" in tool_names
+        assert "workflow_simple-http" in tool_names
 
     @pytest.mark.asyncio
     async def test_fe_003_tools_list_includes_system_tools(
@@ -343,7 +343,7 @@ class TestToolsCall:
             mcp_frontend,
             "tools/call",
             {
-                "name": "workflow:simple-http",
+                "name": "workflow_simple-http",
                 "arguments": {"url": "https://example.com"},
             },
         )
@@ -386,7 +386,7 @@ class TestToolsCall:
             mcp_frontend,
             "tools/call",
             {
-                "name": "workflow:simple-http",
+                "name": "workflow_simple-http",
                 "arguments": {},  # Missing required 'url'
             },
         )
@@ -462,7 +462,7 @@ class TestToolsCall:
             mcp_frontend,
             "tools/call",
             {
-                "name": "workflow:simple-http",
+                "name": "workflow_simple-http",
                 "arguments": {"url": "https://example.com"},
             },
         )
@@ -566,7 +566,7 @@ class TestMCPResponseFormat:
             mcp_frontend,
             "tools/call",
             {
-                "name": "workflow:simple-http",
+                "name": "workflow_simple-http",
                 "arguments": {"url": "https://example.com"},
             },
         )
@@ -700,7 +700,7 @@ class TestEdgeCases:
             mcp_frontend,
             "tools/call",
             {
-                "name": "workflow:simple-http",
+                "name": "workflow_simple-http",
                 "arguments": None,
             },
         )

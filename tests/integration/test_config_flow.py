@@ -15,12 +15,10 @@ class TestStartupModeDetection:
     """Tests for startup mode detection."""
 
     def test_startup_no_config_enters_configuration_mode(self):
-        """Test that startup without config uses defaults and can enter Configuration Mode.
+        """Test that startup without config uses defaults and enters Configuration Mode.
 
-        Note: ConfigLoader.load() now uses defaults when config file doesn't exist
-        (use_defaults=True by default). This allows the server to start without a
-        config file. The mode manager can still be initialized in CONFIGURATION mode
-        if needed.
+        When no config file exists, ConfigLoader.load() uses defaults and sets
+        used_defaults=True. PlostApplication should then start in CONFIGURATION mode.
         """
         config_loader = ConfigLoader()
 
@@ -28,9 +26,15 @@ class TestStartupModeDetection:
         config = config_loader.load("/nonexistent/config.yaml")
         assert config is not None  # Should return default config
 
-        # Mode can still be CONFIGURATION when explicitly set
-        mode_manager = ModeManager(initial_mode=Mode.CONFIGURATION)
+        # ConfigLoader should track that defaults were used
+        assert config_loader.used_defaults is True
+        assert config_loader.has_config_file is False
+
+        # Mode should be CONFIGURATION when no config file exists
+        initial_mode = Mode.CONFIGURATION if config_loader.used_defaults else Mode.RUNNING
+        mode_manager = ModeManager(initial_mode=initial_mode)
         assert mode_manager.mode == Mode.CONFIGURATION
+        assert not mode_manager.can_start_workflow()
 
     def test_startup_with_valid_config_enters_running_mode(self):
         """Test that startup with valid config enters Running Mode."""
@@ -97,9 +101,41 @@ telemetry:
             config_loader = ConfigLoader()
             _ = config_loader.load(f.name)
 
-            # Mode should be RUNNING when config is valid
-            mode_manager = ModeManager(initial_mode=Mode.RUNNING)
+            # ConfigLoader should track that a config file was loaded
+            assert config_loader.used_defaults is False
+            assert config_loader.has_config_file is True
+
+            # Mode should be RUNNING when config file exists
+            initial_mode = Mode.CONFIGURATION if config_loader.used_defaults else Mode.RUNNING
+            mode_manager = ModeManager(initial_mode=initial_mode)
             assert mode_manager.mode == Mode.RUNNING
+            assert mode_manager.can_start_workflow()
+
+    def test_startup_with_empty_config_enters_configuration_mode(self):
+        """Test that startup with empty config file enters Configuration Mode.
+
+        An empty config file (or file with only whitespace/comments) should be
+        treated the same as no config file - CONFIGURATION mode for initial setup.
+        This ensures K8s deployments with empty ConfigMaps start in config mode.
+        """
+        # Create an empty config file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("")  # Empty file
+            f.flush()
+
+            config_loader = ConfigLoader()
+            config = config_loader.load(f.name)
+            assert config is not None  # Should return default config
+
+            # ConfigLoader should track that defaults were used (empty = no config)
+            assert config_loader.used_defaults is True
+            assert config_loader.has_config_file is False
+
+            # Mode should be CONFIGURATION when config file is empty
+            initial_mode = Mode.CONFIGURATION if config_loader.used_defaults else Mode.RUNNING
+            mode_manager = ModeManager(initial_mode=initial_mode)
+            assert mode_manager.mode == Mode.CONFIGURATION
+            assert not mode_manager.can_start_workflow()
 
     def test_forced_configuration_mode_flag(self):
         """Test that --mode=configuration forces Configuration Mode."""
@@ -189,7 +225,7 @@ class TestModeTransitions:
         assert mode_manager.can_start_workflow()
 
     def test_configure_transitions_to_configuration_mode(self):
-        """Test that ael:configure transitions to Configuration Mode."""
+        """Test that configure transitions to Configuration Mode."""
         mode_manager = ModeManager(initial_mode=Mode.RUNNING)
         assert mode_manager.mode == Mode.RUNNING
 
