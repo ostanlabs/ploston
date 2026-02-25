@@ -35,7 +35,7 @@ class TestHTTPTransportIntegration:
         registry = MagicMock()
         registry.get_for_mcp_exposure.return_value = [
             {
-                "name": "workflow:test_workflow",
+                "name": "workflow_test_workflow",
                 "description": "A test workflow",
                 "inputSchema": {"type": "object", "properties": {}},
             },
@@ -146,10 +146,10 @@ class TestHTTPTransportIntegration:
         assert data["id"] == 2
         assert "result" in data
         assert "tools" in data["result"]
-        # Should have test_tool and workflow:test_workflow
+        # Should have test_tool and workflow_test_workflow
         tool_names = [t["name"] for t in data["result"]["tools"]]
         assert "test_tool" in tool_names
-        assert "workflow:test_workflow" in tool_names
+        assert "workflow_test_workflow" in tool_names
 
     def test_tools_call_request(self, client, mock_tool_invoker):
         """Test MCP tools/call request."""
@@ -251,7 +251,7 @@ class TestHTTPTransportModeAwareness:
             {"name": "ael:config_get", "description": "Get config"},
         ]
         registry.get_configure_tool_for_mcp_exposure.return_value = {
-            "name": "ael:configure",
+            "name": "configure",
             "description": "Switch to config mode",
         }
         registry.call = AsyncMock(return_value={"content": [{"type": "text", "text": "ok"}]})

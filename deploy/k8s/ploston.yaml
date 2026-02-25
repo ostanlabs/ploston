@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: ploston
-          image: registry.ostanlabs.homelab/ploston:latest
+          image: ghcr.io/ostanlabs/ploston-dev:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8082
@@ -83,4 +83,3 @@ spec:
   ports:
     - port: 8082
       targetPort: 8082
-

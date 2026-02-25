@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 # Reconfigure MCP library loggers to use stderr
 for logger_name in ["mcp", "mcp.client", "mcp.server", "fastmcp"]:
@@ -606,6 +606,65 @@ async def http_health_check(request: Request) -> JSONResponse:
     health_data = await _get_health_data()
     status_code = 200 if health_data.get("status") == "healthy" else 503
     return JSONResponse(health_data, status_code=status_code)
+
+
+# HTTP metrics endpoint for Prometheus scraping
+@mcp.custom_route("/metrics", methods=["GET"])
+async def http_metrics(request: Request) -> Response:
+    """HTTP metrics endpoint for Prometheus scraping.
+
+    Exposes native-tools metrics including:
+    - native_tools_dependency_status: Health status of dependencies (1=healthy, 0=unhealthy, -1=disabled)
+    - native_tools_tools_available: Number of tools available
+    """
+    try:
+        from prometheus_client import REGISTRY, generate_latest
+
+        # Create/update native_tools metrics
+        # These are created fresh each time to reflect current state
+        _update_native_tools_metrics()
+
+        metrics_output = generate_latest(REGISTRY)
+        return Response(
+            content=metrics_output,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
+    except ImportError:
+        return Response(
+            content=b"# prometheus_client not available\n",
+            media_type="text/plain; charset=utf-8",
+        )
+    except Exception as e:
+        return Response(
+            content=f"# Error generating metrics: {e}\n".encode(),
+            media_type="text/plain; charset=utf-8",
+        )
+
+
+# Import the gauges from health.py - they're already created at module level
+from ploston_core.native_tools.health import (
+    TOOLS_AVAILABLE_GAUGE,
+)
+
+
+def _update_native_tools_metrics() -> None:
+    """Update native_tools metrics with current state.
+
+    Note: The gauges are already created in ploston_core.native_tools.health
+    and are updated by the HealthManager. This function just ensures they're
+    up-to-date when the /metrics endpoint is called.
+    """
+    # The HealthManager already updates the prometheus metrics via _update_prometheus_metrics()
+    # which is called after each health check. We just need to ensure the tool count is updated.
+
+    # Count available tools (all registered tools in the MCP server)
+    # FastMCP stores tools in mcp._tool_manager._tools
+    try:
+        tool_count = len(mcp._tool_manager._tools) if hasattr(mcp, "_tool_manager") else 0
+        # Update the "total" label with the MCP server's tool count
+        TOOLS_AVAILABLE_GAUGE.labels(status="mcp_server").set(tool_count)
+    except Exception:
+        pass
 
 
 # =============================================================================

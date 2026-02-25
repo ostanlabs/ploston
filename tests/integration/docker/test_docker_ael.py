@@ -78,17 +78,17 @@ class TestDockerRunningMode:
         assert "python_exec" in tool_names
 
     @pytest.mark.requires_running_mode
-    def test_dc_006_ael_configure_available(
+    def test_dc_006_configure_available(
         self, docker_client: DockerMCPClient, docker_available: bool
     ):
-        """Verify ael:configure tool is available in running mode."""
+        """Verify configure tool is available in running mode."""
         if not docker_available:
             pytest.skip("Docker AEL not available")
 
         docker_client.initialize()
         tools = docker_client.list_tools()
         tool_names = [t.get("name") for t in tools]
-        assert "ael:configure" in tool_names
+        assert "configure" in tool_names
 
 
 class TestDockerPerformance:

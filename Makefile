@@ -21,7 +21,7 @@ YELLOW := \033[33m
 RED := \033[31m
 RESET := \033[0m
 
-.PHONY: help install test lint format serve docker-build docker-run clean
+.PHONY: help install test lint format serve docker-build docker-run clean build-image push-image push-image-prod promote-image
 
 # =============================================================================
 # HELP
@@ -131,12 +131,32 @@ build-image:
 		-f docker/native-tools/Dockerfile .
 	@echo "$(GREEN)Build complete!$(RESET)"
 
-## Push Docker images to GHCR
+## Push Docker images to GHCR (dev registry)
 push-image:
-	@echo "$(CYAN)Pushing Docker images...$(RESET)"
+	@echo "$(CYAN)Pushing Docker images to dev registry...$(RESET)"
 	docker push ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG)
 	docker push ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG)
 	@echo "$(GREEN)Push complete!$(RESET)"
+
+## Push Docker images to GHCR (prod registry)
+## Usage: make push-image-prod IMAGE_TAG=1.0.0
+push-image-prod:
+	@echo "$(CYAN)Pushing Docker images to prod registry...$(RESET)"
+	docker push ghcr.io/ostanlabs/ploston:$(IMAGE_TAG)
+	docker push ghcr.io/ostanlabs/native-tools:$(IMAGE_TAG)
+	@echo "$(GREEN)Push complete!$(RESET)"
+
+## Promote images from dev to edge
+## Usage: make promote-image SOURCE_TAG=sha-abc123
+promote-image:
+	@echo "$(CYAN)Promoting images to edge...$(RESET)"
+	docker buildx imagetools create \
+		--tag ghcr.io/ostanlabs/ploston-dev:edge \
+		ghcr.io/ostanlabs/ploston-dev:$(SOURCE_TAG)
+	docker buildx imagetools create \
+		--tag ghcr.io/ostanlabs/native-tools-dev:edge \
+		ghcr.io/ostanlabs/native-tools-dev:$(SOURCE_TAG)
+	@echo "$(GREEN)Promotion complete!$(RESET)"
 
 ## Run server in Docker
 docker-run:
@@ -165,4 +185,3 @@ clean:
 	rm -rf htmlcov/ .coverage
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)Clean!$(RESET)"
-
