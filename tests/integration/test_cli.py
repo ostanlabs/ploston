@@ -20,7 +20,6 @@ Prerequisites:
 """
 
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -70,8 +69,7 @@ def cli_runner() -> Callable:
 
         cmd.extend(args)
 
-        env = os.environ.copy()
-        env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        # Don't override PYTHONPATH - let the venv's .pth files handle editable installs
         # Pass through PLOSTON_SERVER if set (allows running tests against different servers)
         # Default is http://localhost:8080 if not set
 
@@ -81,7 +79,6 @@ def cli_runner() -> Callable:
             text=True,
             timeout=timeout,
             cwd=PROJECT_ROOT,
-            env=env,
         )
         return result
 
