@@ -84,12 +84,12 @@ def mock_mcp_connection(mock_tool_schemas) -> MagicMock:
     check_imports()
 
     connection = MagicMock(spec=MCPConnection)
-    connection.name = "native_tools"
+    connection.name = "firecrawl_server"  # Use non-native server name for MCP tests
     connection.status = ConnectionStatus.CONNECTED
     connection.list_tools.return_value = mock_tool_schemas
     connection.refresh_tools = AsyncMock(return_value=mock_tool_schemas)
     connection.get_status.return_value = ServerStatus(
-        name="native_tools",
+        name="firecrawl_server",
         status=ConnectionStatus.CONNECTED,
         tools=["firecrawl_scrape", "http_request"],
     )
@@ -102,13 +102,13 @@ def mock_mcp_manager(mock_mcp_connection, mock_tool_schemas) -> MagicMock:
     check_imports()
 
     manager = MagicMock(spec=MCPClientManager)
-    manager._connections = {"native_tools": mock_mcp_connection}
+    manager._connections = {"firecrawl_server": mock_mcp_connection}
     manager.list_connections.return_value = [mock_mcp_connection]
     manager.get_connection.return_value = mock_mcp_connection
     manager.connect_all = AsyncMock(
         return_value={
-            "native_tools": ServerStatus(
-                name="native_tools",
+            "firecrawl_server": ServerStatus(
+                name="firecrawl_server",
                 status=ConnectionStatus.CONNECTED,
                 tools=["firecrawl_scrape", "http_request"],
             ),
@@ -117,11 +117,11 @@ def mock_mcp_manager(mock_mcp_connection, mock_tool_schemas) -> MagicMock:
     # Use mock_tool_schemas to ensure proper schema structure is preserved
     manager.refresh_all = AsyncMock(
         return_value={
-            "native_tools": mock_tool_schemas,
+            "firecrawl_server": mock_tool_schemas,
         }
     )
     manager.get_all_tools.return_value = {
-        "native_tools": mock_tool_schemas,
+        "firecrawl_server": mock_tool_schemas,
     }
     return manager
 
@@ -184,7 +184,7 @@ class TestToolDiscovery:
         assert firecrawl is not None
         assert firecrawl.name == "firecrawl_scrape"
         assert firecrawl.source == ToolSource.MCP
-        assert firecrawl.server_name == "native_tools"
+        assert firecrawl.server_name == "firecrawl_server"
 
     @pytest.mark.asyncio
     async def test_tr_002_tool_schema_captured(
@@ -327,7 +327,7 @@ class TestToolCaching:
         mock_mcp_connection.status = ConnectionStatus.DISCONNECTED
         mock_mcp_manager.refresh_all = AsyncMock(
             return_value={
-                "native_tools": [],
+                "firecrawl_server": [],
             }
         )
 
@@ -375,7 +375,7 @@ class TestToolRefresh:
         new_tools = mock_tool_schemas + [new_tool]
         mock_mcp_manager.refresh_all = AsyncMock(
             return_value={
-                "native_tools": new_tools,
+                "firecrawl_server": new_tools,
             }
         )
 
@@ -426,7 +426,7 @@ class TestToolRefresh:
         ]
         mock_mcp_manager.refresh_all = AsyncMock(
             return_value={
-                "native_tools": updated_tools,
+                "firecrawl_server": updated_tools,
             }
         )
 
@@ -586,8 +586,8 @@ class TestToolLookup:
         await tool_registry.initialize()
 
         # List tools from specific server
-        native_tools = tool_registry.list_tools(server_name="native_tools")
-        assert all(t.server_name == "native_tools" for t in native_tools)
+        server_tools = tool_registry.list_tools(server_name="firecrawl_server")
+        assert all(t.server_name == "firecrawl_server" for t in server_tools)
 
     @pytest.mark.asyncio
     async def test_tr_011_search_tools(
@@ -635,7 +635,7 @@ class TestToolRouter:
         router = tool_registry.get_router("firecrawl_scrape")
         assert router is not None
         assert router.source == ToolSource.MCP
-        assert router.server_name == "native_tools"
+        assert router.server_name == "firecrawl_server"
 
     @pytest.mark.asyncio
     async def test_tr_router_system_tool(
