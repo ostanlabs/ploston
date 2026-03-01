@@ -88,7 +88,13 @@ class TestDockerRunningMode:
         docker_client.initialize()
         tools = docker_client.list_tools()
         tool_names = [t.get("name") for t in tools]
-        assert "configure" in tool_names
+        # Accept either legacy "configure" or new "ael:configure" or "ploston:configure"
+        has_configure = (
+            "configure" in tool_names
+            or "ael:configure" in tool_names
+            or "ploston:configure" in tool_names
+        )
+        assert has_configure, f"Expected configure tool, got: {tool_names}"
 
 
 class TestDockerPerformance:

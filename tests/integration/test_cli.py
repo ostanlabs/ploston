@@ -150,43 +150,38 @@ outputs:
 
 
 # =============================================================================
-# Serve Command Tests (CLI-001 to CLI-002)
-# NOTE: The ploston_cli is a thin HTTP client. It does NOT have 'serve' or 'api'
-# commands. Those commands exist in the ploston package (ploston.cli) which is
-# used to run the server. These tests are skipped for the thin client.
+# Version and Bridge Command Tests (CLI-001 to CLI-002)
+# NOTE: ploston_cli is a thin HTTP client. These tests verify basic CLI
+# functionality that doesn't require a running server.
 # =============================================================================
 
 
-@pytest.mark.skip(reason="ploston_cli is a thin HTTP client without 'serve' command")
-class TestAelServe:
-    """Tests for 'ael serve' command (CLI-001 to CLI-002).
+class TestCliBasics:
+    """Tests for basic CLI commands (CLI-001 to CLI-002).
 
-    NOTE: Skipped because ploston_cli is a thin HTTP client that connects to
-    a Ploston server. The 'serve' command is in the ploston package, not ploston_cli.
+    These test CLI commands that work without a running server.
     """
 
-    @pytest.mark.slow
-    def test_cli_001_serve_starts(self, cli_runner: Callable):
+    def test_cli_001_version_command(self, cli_runner: Callable):
         """
-        CLI-001: Verify 'ael serve' starts MCP server.
-
-        Note: This test starts the server briefly and checks it doesn't crash.
+        CLI-001: Verify 'ploston version' shows version info.
         """
-        # Start serve with very short timeout - just checking it starts
-        result = cli_runner("serve", "--help")
-
-        # Help should work at minimum
-        assert result.returncode == 0
-        assert "serve" in result.stdout.lower() or "mcp" in result.stdout.lower()
-
-    def test_cli_002_serve_help(self, cli_runner: Callable):
-        """
-        CLI-002: Verify 'ael serve --help' shows options.
-        """
-        result = cli_runner("serve", "--help")
+        result = cli_runner("version")
 
         assert result.returncode == 0
-        assert "serve" in result.stdout.lower()
+        # Should show version information
+        assert "version" in result.stdout.lower() or "ploston" in result.stdout.lower()
+
+    def test_cli_002_bridge_help(self, cli_runner: Callable):
+        """
+        CLI-002: Verify 'ploston bridge --help' shows options.
+
+        The bridge command is the key feature for MCP integration.
+        """
+        result = cli_runner("bridge", "--help")
+
+        assert result.returncode == 0
+        assert "bridge" in result.stdout.lower() or "mcp" in result.stdout.lower()
 
 
 # =============================================================================
