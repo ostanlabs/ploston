@@ -253,8 +253,9 @@ class TestToolCalls:
         """
         response = mcp_client.call_tool("nonexistent_tool_xyz_12345", {})
 
-        # Should return error
-        assert "error" in response
+        # Should return error - MCP returns tool errors via result.isError
+        result = response.get("result", {})
+        assert result.get("isError") is True or "error" in response
 
 
 # =============================================================================
@@ -271,8 +272,9 @@ class TestErrorHandling:
         """
         response = mcp_client.send("invalid/method/xyz", {})
 
-        # Should return error for unknown method
-        assert "error" in response
+        # Should return error for unknown method - MCP may return error in result.error
+        result = response.get("result", {})
+        assert "error" in response or "error" in result
 
     def test_mci_011_malformed_params_handled(self, mcp_client):
         """

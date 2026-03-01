@@ -14,11 +14,11 @@ from typing import Any, Generator
 import pytest
 import requests
 
-# Default docker-compose endpoint
-DEFAULT_DOCKER_URL = "http://localhost:8082"
+# Default docker-compose endpoint (same as scenario tests)
+DEFAULT_DOCKER_URL = "http://localhost:8080"
 
-# Path to docker-compose.test.yml relative to repo root
-DOCKER_COMPOSE_FILE = "docker-compose.test.yml"
+# Path to docker-compose.scenario.yaml relative to repo root
+DOCKER_COMPOSE_FILE = "docker-compose.scenario.yaml"
 
 
 def get_repo_root() -> Path:
