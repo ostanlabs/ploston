@@ -109,7 +109,9 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Use META_REPO_TOKEN (PAT) instead of GITHUB_TOKEN because the package
+          # is linked to agent-execution-layer repo, not this repo
+          password: ${{ secrets.META_REPO_TOKEN }}
 
       - name: Build and push ploston-dev image
         uses: docker/build-push-action@v6
