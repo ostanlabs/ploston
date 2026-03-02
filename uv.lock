@@ -1293,10 +1293,11 @@ wheels = [
 
 [[package]]
 name = "ploston-core"
-version = "1.3.0"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
+    { name = "fastmcp" },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "mcp" },
@@ -1313,9 +1314,9 @@ dependencies = [
     { name = "structlog" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/26/4c/219f81ea39c7c0c86d7837f7b0ba5da3932d2af56e346da3ce6f59502090/ploston_core-1.3.0.tar.gz", hash = "sha256:23ab43035af1b46af229a1d97704733947111fd7c9bce559046ebef47ab50d63", size = 182634 }
+sdist = { url = "https://files.pythonhosted.org/packages/3a/0d/bd61cc7c413535978677eeb8293feef07d5b977aed775a9cff42bc90c893/ploston_core-1.4.0.tar.gz", hash = "sha256:ef623e3db3a2dd72d8964ad8cf676b71d04651c7bac25cd0503e414185f9fb14", size = 248856 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c8/4f/7734e746e18e4ac4c1e08ef25beadcf8cfb1f64c9d7efd7ac1b1c1b9b213/ploston_core-1.3.0-py3-none-any.whl", hash = "sha256:8ba53fc9269795dbac4a5b247828018301bcd100573a0b1e9ae2f0b847222446", size = 184835 },
+    { url = "https://files.pythonhosted.org/packages/9e/3a/7946353054591e9f96478f45a789b59e4ba8bac7ecbe59b4829c9a01f9e0/ploston_core-1.4.0-py3-none-any.whl", hash = "sha256:009c8a543aaad35f514351d815d7d77923518206e4f8f116aafa9a1c4f2f4426", size = 241943 },
 ]
 
 [[package]]
