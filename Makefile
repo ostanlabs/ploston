@@ -118,25 +118,27 @@ docker-build:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 	@echo "$(GREEN)Build complete!$(RESET)"
 
-## Build Docker images for CI (ploston + native-tools)
+## Build Docker images for CI (ploston + native-tools) - multi-arch
 ## Usage: make build-image IMAGE_TAG=xxx CORE_VERSION=1.4.0.dev123 CORE_SOURCE=test-pypi
+## Note: Requires docker buildx and QEMU for cross-platform builds
+PLATFORMS ?= linux/amd64,linux/arm64
+
 build-image:
-	@echo "$(CYAN)Building Docker images...$(RESET)"
-	docker build -t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) \
+	@echo "$(CYAN)Building multi-arch Docker images ($(PLATFORMS))...$(RESET)"
+	docker buildx build --platform $(PLATFORMS) --push \
+		-t ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG) \
 		--build-arg PLOSTON_CORE_REF=$(CORE_VERSION) \
 		--build-arg CORE_SOURCE=$(CORE_SOURCE) .
-	docker build -t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) \
+	docker buildx build --platform $(PLATFORMS) --push \
+		-t ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG) \
 		--build-arg PLOSTON_CORE_REF=$(CORE_VERSION) \
 		--build-arg CORE_SOURCE=$(CORE_SOURCE) \
 		-f docker/native-tools/Dockerfile .
 	@echo "$(GREEN)Build complete!$(RESET)"
 
-## Push Docker images to GHCR (dev registry)
+## Push Docker images to GHCR (dev registry) - no longer needed, buildx pushes directly
 push-image:
-	@echo "$(CYAN)Pushing Docker images to dev registry...$(RESET)"
-	docker push ghcr.io/ostanlabs/ploston-dev:$(IMAGE_TAG)
-	docker push ghcr.io/ostanlabs/native-tools-dev:$(IMAGE_TAG)
-	@echo "$(GREEN)Push complete!$(RESET)"
+	@echo "$(YELLOW)Note: Multi-arch builds push directly via buildx. This target is a no-op.$(RESET)"
 
 ## Push Docker images to GHCR (prod registry)
 ## Usage: make push-image-prod IMAGE_TAG=1.0.0
