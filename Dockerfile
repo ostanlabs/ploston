@@ -106,6 +106,11 @@ USER ploston
 COPY --chown=ploston:ploston docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Labels for GitHub Container Registry
+# This links the package to the ploston repo, allowing GITHUB_TOKEN to push
+LABEL org.opencontainers.image.source=https://github.com/ostanlabs/ploston
+LABEL org.opencontainers.image.description="Ploston - Agent Execution Layer"
+LABEL org.opencontainers.image.licenses=MIT
+
 # Default command: start MCP server with HTTP transport
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-

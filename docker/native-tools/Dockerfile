@@ -120,5 +120,11 @@ USER nativetools
 # Working directory for filesystem operations
 WORKDIR /data
 
+# Labels for GitHub Container Registry
+# This links the package to the ploston repo, allowing GITHUB_TOKEN to push
+LABEL org.opencontainers.image.source=https://github.com/ostanlabs/ploston
+LABEL org.opencontainers.image.description="Ploston Native Tools - MCP server with filesystem, network, data tools"
+LABEL org.opencontainers.image.licenses=MIT
+
 # Default command: start native tools MCP server in HTTP mode
 CMD ["python", "-m", "ploston.native_tools.server"]
