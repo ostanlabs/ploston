@@ -111,10 +111,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch images
-        run: |
-          make build-image IMAGE_TAG=${{ env.IMAGE_TAG }} \
-            CORE_VERSION=${{ needs.validate-core-version.outputs.core_version }}
+      - name: Build and push ploston-dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/ostanlabs/ploston-dev:${{ env.IMAGE_TAG }}
+          build-args: |
+            PLOSTON_CORE_REF=${{ needs.validate-core-version.outputs.core_version }}
+            CORE_SOURCE=
+
+      - name: Build and push native-tools-dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/native-tools/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/ostanlabs/native-tools-dev:${{ env.IMAGE_TAG }}
+          build-args: |
+            PLOSTON_CORE_REF=${{ needs.validate-core-version.outputs.core_version }}
+            CORE_SOURCE=
 
   dispatch-component-updated:
     needs: [validate-core-version, build-and-push]
