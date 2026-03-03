@@ -56,7 +56,7 @@ def cli_runner() -> Callable:
     the CLI doesn't have a --config option.
 
     Server URL can be configured via PLOSTON_SERVER environment variable.
-    Default: http://localhost:8080
+    Default: http://localhost:8022
     """
 
     def _run(*args: str, timeout: int = 30, config: str = None) -> subprocess.CompletedProcess:
@@ -71,7 +71,7 @@ def cli_runner() -> Callable:
 
         # Don't override PYTHONPATH - let the venv's .pth files handle editable installs
         # Pass through PLOSTON_SERVER if set (allows running tests against different servers)
-        # Default is http://localhost:8080 if not set
+        # Default is http://localhost:8022 if not set
 
         result = subprocess.run(
             cmd,

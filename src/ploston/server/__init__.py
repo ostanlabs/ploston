@@ -25,7 +25,7 @@ __all__ = [
 async def create_server(
     config_path: str | None = None,
     host: str = "0.0.0.0",
-    port: int = 8080,
+    port: int = 8022,
     with_rest_api: bool = True,
 ) -> PlostApplication:
     """Create OSS server with community defaults.
@@ -33,7 +33,7 @@ async def create_server(
     Args:
         config_path: Optional path to configuration file.
         host: HTTP host (default: 0.0.0.0)
-        port: HTTP port (default: 8080)
+        port: HTTP port (default: 8022)
         with_rest_api: Enable REST API alongside MCP (default: True)
 
     Returns:
@@ -62,7 +62,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Ploston OSS Server")
     parser.add_argument("-c", "--config", help="Config file path")
-    parser.add_argument("-p", "--port", type=int, default=8080, help="HTTP port")
+    parser.add_argument("-p", "--port", type=int, default=8022, help="HTTP port")
     parser.add_argument("--host", default="0.0.0.0", help="HTTP host")
     parser.add_argument("--no-rest", action="store_true", help="Disable REST API (MCP only)")
     args = parser.parse_args()

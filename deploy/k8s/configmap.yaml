@@ -9,7 +9,7 @@ metadata:
 data:
   # Ploston Configuration
   AEL_HOST: "0.0.0.0"
-  AEL_PORT: "8082"
+  AEL_PORT: "8022"
   AEL_TRANSPORT: "http"
   AEL_CONFIG_PATH: "/app/config/ploston-config.yaml"
 
@@ -85,4 +85,3 @@ data:
     logging:
       level: INFO
       format: json
-

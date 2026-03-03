@@ -41,7 +41,7 @@ help:
 	@echo "  make check        Run lint + format check + tests"
 	@echo ""
 	@echo "$(GREEN)Server:$(RESET)"
-	@echo "  make serve        Start server locally (port 8080)"
+	@echo "  make serve        Start server locally (port 8022)"
 	@echo "  make serve-dev    Start server with auto-reload"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
@@ -100,13 +100,13 @@ check: lint test
 
 ## Start server locally
 serve:
-	@echo "$(CYAN)Starting Ploston server on port 8080...$(RESET)"
-	uv run ploston-server --host 0.0.0.0 --port 8080
+	@echo "$(CYAN)Starting Ploston server on port 8022...$(RESET)"
+	uv run ploston-server --host 0.0.0.0 --port 8022
 
 ## Start server with auto-reload (for development)
 serve-dev:
 	@echo "$(CYAN)Starting Ploston server with auto-reload...$(RESET)"
-	uv run ploston-server --host 0.0.0.0 --port 8080 --reload
+	uv run ploston-server --host 0.0.0.0 --port 8022 --reload
 
 # =============================================================================
 # DOCKER
@@ -163,7 +163,7 @@ promote-image:
 ## Run server in Docker
 docker-run:
 	@echo "$(CYAN)Running Ploston in Docker...$(RESET)"
-	docker run --rm -p 8080:8080 -p 9090:9090 $(IMAGE_NAME):$(IMAGE_TAG)
+	docker run --rm -p 8022:8022 -p 9090:9090 $(IMAGE_NAME):$(IMAGE_TAG)
 
 ## Shell into Docker container
 docker-shell:

@@ -2,7 +2,7 @@
 # Ploston Dockerfile - Multi-stage build for optimized image size
 # =============================================================================
 # Build: docker build -t ostanlabs/ploston:latest .
-# Run:   docker run -p 8080:8080 ostanlabs/ploston:latest
+# Run:   docker run -p 8022:8022 ostanlabs/ploston:latest
 #
 # Build with specific ploston-core version:
 #   docker build --build-arg PLOSTON_CORE_REF=main -t ostanlabs/ploston:dev .
@@ -86,12 +86,12 @@ ENV DOCKER_CONTAINER=1
 
 # Default configuration
 ENV AEL_HOST=0.0.0.0
-ENV AEL_PORT=8080
+ENV AEL_PORT=8022
 
 # Expose ports
-# 8080 - MCP HTTP server
+# 8022 - MCP HTTP server
 # 9090 - Prometheus metrics (optional)
-EXPOSE 8080 9090
+EXPOSE 8022 9090
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

@@ -21,7 +21,7 @@ spec:
           image: ghcr.io/ostanlabs/ploston-dev:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 8082
+            - containerPort: 8022
           env:
             - name: AEL_CONFIG_PATH
               value: "/app/config/ploston-config.yaml"
@@ -55,13 +55,13 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 8082
+              port: 8022
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
-              port: 8082
+              port: 8022
             initialDelaySeconds: 30
             periodSeconds: 30
       volumes:
@@ -81,5 +81,5 @@ spec:
   selector:
     app: ploston
   ports:
-    - port: 8082
-      targetPort: 8082
+    - port: 8022
+      targetPort: 8022
