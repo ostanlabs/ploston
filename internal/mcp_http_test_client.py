@@ -6,11 +6,11 @@ This utility connects to a Ploston server via HTTP and communicates using the
 MCP protocol (JSON-RPC). Designed for use with docker-compose or any running server.
 
 Usage:
-    # Connect to docker-compose server (default: localhost:8082)
+    # Connect to docker-compose server (default: localhost:8022)
     python internal/mcp_http_test_client.py --list-tools
 
     # Connect to custom host/port
-    python internal/mcp_http_test_client.py --host localhost --port 8080 --list-tools
+    python internal/mcp_http_test_client.py --host localhost --port 8022 --list-tools
 
     # Call a tool
     python internal/mcp_http_test_client.py --call http_request '{"url": "https://httpbin.org/get", "method": "GET"}'
@@ -20,7 +20,7 @@ Usage:
 
 Environment Variables:
     PLOSTON_HOST: Server host (default: 127.0.0.1)
-    PLOSTON_PORT: Server port (default: 8082 for docker-compose test server)
+    PLOSTON_PORT: Server port (default: 8022 for docker-compose test server)
 """
 
 import argparse
@@ -39,7 +39,7 @@ class MCPHTTPTestClient:
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: int = 8082,
+        port: int = 8022,
     ):
         self.host = host
         self.port = port
@@ -206,9 +206,9 @@ def interactive_mode(client: MCPHTTPTestClient) -> None:
 
 
 def main():
-    # Default port is 8082 (docker-compose test server)
+    # Default port is 8022 (docker-compose test server)
     default_host = os.environ.get("PLOSTON_HOST", "127.0.0.1")
-    default_port = int(os.environ.get("PLOSTON_PORT", "8082"))
+    default_port = int(os.environ.get("PLOSTON_PORT", "8022"))
 
     parser = argparse.ArgumentParser(
         description="MCP HTTP Test Client for Ploston",

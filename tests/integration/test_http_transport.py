@@ -68,7 +68,7 @@ class TestHTTPTransportIntegration:
         """Create HTTP config."""
         return MCPHTTPConfig(
             host="127.0.0.1",
-            port=8080,
+            port=8022,
             cors_origins=["*"],
         )
 
@@ -261,7 +261,7 @@ class TestHTTPTransportModeAwareness:
     def frontend_config_mode(self, mock_config_tool_registry):
         """Create frontend in configuration mode with HTTP transport."""
         mode_manager = ModeManager(initial_mode=Mode.CONFIGURATION)
-        http_config = MCPHTTPConfig(host="127.0.0.1", port=8080)
+        http_config = MCPHTTPConfig(host="127.0.0.1", port=8022)
 
         return MCPFrontend(
             workflow_engine=None,

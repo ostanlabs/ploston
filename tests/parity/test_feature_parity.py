@@ -107,7 +107,7 @@ class TestComponentInitializationParity:
         from ploston_core.mcp_frontend import MCPFrontend, MCPServerConfig
         from ploston_core.types import MCPTransport
 
-        http_config = MCPHTTPConfig(host="127.0.0.1", port=8080)
+        http_config = MCPHTTPConfig(host="127.0.0.1", port=8022)
         config = MCPServerConfig()
 
         frontend = MCPFrontend(
@@ -156,7 +156,7 @@ class TestAPIEndpointParity:
 
         # Check routes exist
         routes = [route.path for route in app.routes]
-        assert any("/workflows" in route for route in routes), (
-            f"No workflows route found in {routes}"
-        )
+        assert any(
+            "/workflows" in route for route in routes
+        ), f"No workflows route found in {routes}"
         assert any("/tools" in route for route in routes), f"No tools route found in {routes}"

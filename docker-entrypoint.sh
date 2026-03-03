@@ -8,7 +8,7 @@
 set -e
 
 # Build command arguments
-CMD_ARGS="--host ${AEL_HOST:-0.0.0.0} --port ${AEL_PORT:-8080}"
+CMD_ARGS="--host ${AEL_HOST:-0.0.0.0} --port ${AEL_PORT:-8022}"
 
 # Add config file if specified (check both PLOSTON_CONFIG_PATH and AEL_CONFIG)
 CONFIG_FILE="${PLOSTON_CONFIG_PATH:-${AEL_CONFIG}}"
@@ -18,4 +18,3 @@ fi
 
 # Execute the command using ploston-server
 exec ploston-server ${CMD_ARGS}
-

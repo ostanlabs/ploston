@@ -48,7 +48,7 @@ def rest_config() -> RESTConfig:
     """Create REST API configuration."""
     return RESTConfig(
         host="127.0.0.1",
-        port=8080,
+        port=8022,
         prefix="/api/v1",
         docs_enabled=True,
         require_auth=False,
