@@ -1,13 +1,16 @@
 # =============================================================================
 # Native Tools Dockerfile - MCP server with filesystem, network, data tools
 # =============================================================================
-# Build: docker build -t ostanlabs/native-tools:latest -f docker/native-tools/Dockerfile .
-# Run:   docker run -p 8081:8081 ostanlabs/native-tools:latest
+# Build from PyPI (default, used by CI/release):
+#   docker build -t native-tools:latest -f docker/native-tools/Dockerfile .
+#
+# Build from local source (used by `ploston bootstrap --build-from-source`):
+#   docker build --build-arg INSTALL_SOURCE=local \
+#     -f packages/ploston/docker/native-tools/Dockerfile -t native-tools:local .
+#   (build context = meta-repo root)
 #
 # Build with specific ploston-core version:
-#   docker build --build-arg PLOSTON_CORE_REF=main -t ostanlabs/native-tools:dev .
-# =============================================================================
-# Target size: <400MB
+#   docker build --build-arg PLOSTON_CORE_REF=main -t native-tools:dev .
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -15,10 +18,9 @@
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
-# Optional: ploston-core version or git ref
-# - If looks like a version (e.g., 1.4.0.dev1738800000), install from PyPI/TestPyPI
-# - If looks like a git ref (branch, tag, SHA), install from git
-# - If not set, uses ploston-core from PyPI (default for releases)
+# Install source: "pypi" (default) or "local" (from meta-repo checkout)
+ARG INSTALL_SOURCE="pypi"
+# Optional: ploston-core version or git ref (only used when INSTALL_SOURCE=pypi)
 ARG PLOSTON_CORE_REF=""
 # Source for dev versions: "test-pypi" or "pypi" (default)
 ARG CORE_SOURCE="pypi"
@@ -34,33 +36,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv for fast package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy package source (needed for local ploston install)
+# Copy source — what we copy depends on INSTALL_SOURCE
 COPY . ./
 
-# Create virtual environment and install packages using uv
-# Determine if PLOSTON_CORE_REF is a PyPI version or git ref
+# Create virtual environment and install packages
 RUN uv venv /app/.venv && \
-    if [ -n "$PLOSTON_CORE_REF" ]; then \
-      # Check if it looks like a version (contains digits and dots, possibly .dev)
-      if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
-        if [ "$CORE_SOURCE" = "test-pypi" ]; then \
-          echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI (no-deps)" && \
-          uv pip install --python /app/.venv/bin/python \
-            --index-url https://test.pypi.org/simple \
-            --extra-index-url https://pypi.org/simple \
-            --index-strategy unsafe-best-match \
-            --no-deps \
-            "ploston-core==${PLOSTON_CORE_REF}"; \
+    if [ "$INSTALL_SOURCE" = "local" ]; then \
+      echo "Installing from local source" && \
+      uv pip install --python /app/.venv/bin/python ./packages/ploston-core && \
+      uv pip install --python /app/.venv/bin/python "./packages/ploston[native-tools]"; \
+    else \
+      if [ -n "$PLOSTON_CORE_REF" ]; then \
+        if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
+          if [ "$CORE_SOURCE" = "test-pypi" ]; then \
+            echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI (no-deps)" && \
+            uv pip install --python /app/.venv/bin/python \
+              --index-url https://test.pypi.org/simple \
+              --extra-index-url https://pypi.org/simple \
+              --index-strategy unsafe-best-match \
+              --no-deps \
+              "ploston-core==${PLOSTON_CORE_REF}"; \
+          else \
+            echo "Installing ploston-core==$PLOSTON_CORE_REF from PyPI" && \
+            uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; \
+          fi; \
         else \
-          echo "Installing ploston-core==$PLOSTON_CORE_REF from PyPI" && \
-          uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; \
+          echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
+          uv pip install --python /app/.venv/bin/python "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
         fi; \
-      else \
-        echo "Installing ploston-core from git ref: $PLOSTON_CORE_REF" && \
-        uv pip install --python /app/.venv/bin/python "git+https://github.com/ostanlabs/ploston-core.git@${PLOSTON_CORE_REF}"; \
-      fi; \
-    fi && \
-    uv pip install --python /app/.venv/bin/python ".[native-tools]"
+      fi && \
+      uv pip install --python /app/.venv/bin/python ".[native-tools]"; \
+    fi
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
