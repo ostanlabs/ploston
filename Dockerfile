@@ -52,12 +52,25 @@ RUN uv venv /app/.venv && \
         if echo "$PLOSTON_CORE_REF" | grep -qE '^[0-9]+\.[0-9]+'; then \
           if [ "$CORE_SOURCE" = "test-pypi" ]; then \
             echo "Installing ploston-core==$PLOSTON_CORE_REF from Test PyPI (no-deps)" && \
-            uv pip install --python /app/.venv/bin/python \
-              --index-url https://test.pypi.org/simple \
-              --extra-index-url https://pypi.org/simple \
-              --index-strategy unsafe-best-match \
-              --no-deps \
-              "ploston-core==${PLOSTON_CORE_REF}"; \
+            ATTEMPT=1 && MAX_ATTEMPTS=5 && \
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do \
+              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..." && \
+              if uv pip install --python /app/.venv/bin/python \
+                --index-url https://test.pypi.org/simple \
+                --extra-index-url https://pypi.org/simple \
+                --index-strategy unsafe-best-match \
+                --no-deps \
+                --refresh \
+                "ploston-core==${PLOSTON_CORE_REF}"; then \
+                break; \
+              fi && \
+              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then \
+                echo "Failed after $MAX_ATTEMPTS attempts" && exit 1; \
+              fi && \
+              echo "Waiting 10s for CDN propagation..." && \
+              sleep 10 && \
+              ATTEMPT=$((ATTEMPT + 1)); \
+            done; \
           else \
             echo "Installing ploston-core==$PLOSTON_CORE_REF from PyPI" && \
             uv pip install --python /app/.venv/bin/python "ploston-core==${PLOSTON_CORE_REF}"; \
