@@ -18,6 +18,7 @@ Prerequisites:
 - Run after Milestone M4
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -446,6 +447,56 @@ result = math.sqrt(16)
 
         assert result.status == ExecutionStatus.COMPLETED
         assert result.outputs["total"] == 6
+
+    @pytest.mark.asyncio
+    async def test_async_tool_call_from_code_step(
+        self,
+        workflow_engine: "WorkflowEngine",
+        mock_tool_invoker: MagicMock,
+    ):
+        """
+        Verify that code steps can use ``await context.tools.call(...)``
+        to invoke tools and receive actual results (not unawaited coroutines).
+
+        This is a regression test for the bug where sandbox exec() ran
+        synchronously, so async tool calls returned coroutine objects
+        instead of real data.
+        """
+        check_imports()
+
+        # Set up mock_tool_invoker.call (ToolCallerProtocol) to return data
+        async def tool_call(tool_name: str, params: dict) -> Any:
+            if tool_name == "lookup":
+                return {"status": "ok", "value": 42}
+            return None
+
+        mock_tool_invoker.call = AsyncMock(side_effect=tool_call)
+
+        workflow = WorkflowDefinition(
+            name="async-tool-call-workflow",
+            version="1.0",
+            inputs=[],
+            steps=[
+                StepDefinition(
+                    id="fetch",
+                    code="""
+data = await context.tools.call("lookup", {"key": "test"})
+result = data["value"]
+""",
+                ),
+            ],
+            outputs=[
+                OutputDefinition(name="answer", from_path="steps.fetch.output"),
+            ],
+        )
+
+        result = await workflow_engine.execute_workflow(
+            workflow=workflow,
+            inputs={},
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert result.outputs["answer"] == 42
 
 
 # =============================================================================
