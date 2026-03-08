@@ -650,7 +650,7 @@ class TestToolRouter:
         router = tool_registry.get_router("python_exec")
         assert router is not None
         assert router.source == ToolSource.SYSTEM
-        assert router.server_name is None
+        assert router.server_name == "system"
 
     @pytest.mark.asyncio
     async def test_tr_router_unknown_tool(
