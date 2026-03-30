@@ -162,6 +162,18 @@ class WorkflowValidator:
                         )
                     )
 
+            # Validate when expression syntax (must be a valid Jinja2 expression)
+            if step.when:
+                when_errors = self._template_engine.validate({"_when": "{{ " + step.when + " }}"})
+                for error in when_errors:
+                    errors.append(
+                        ValidationIssue(
+                            path=f"steps.{step.id}.when",
+                            message=f"Template error in when expression: {error}",
+                            severity="error",
+                        )
+                    )
+
         # Check for circular dependencies
         try:
             workflow.get_execution_order()
