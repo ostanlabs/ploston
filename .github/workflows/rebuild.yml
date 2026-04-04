@@ -1,46 +1,19 @@
 name: Rebuild
 
 on:
-  workflow_call:
-    inputs:
-      cascade_id:
-        description: 'Cascade ID from the triggering cascade'
-        required: true
-        type: string
-      core_version:
-        description: 'ploston-core version to build against'
-        required: true
-        type: string
-      source:
-        description: 'Package source: test-pypi or pypi'
-        required: false
-        type: string
-        default: 'test-pypi'
-    outputs:
-      image_tag:
-        description: 'Docker image tag produced (sha-<commit>)'
-        value: ${{ jobs.rebuild.outputs.image_tag }}
-      sha:
-        description: 'Git SHA of the ploston repo at build time'
-        value: ${{ jobs.rebuild.outputs.sha }}
-      status:
-        description: 'Build status: success or failure'
-        value: ${{ jobs.rebuild.outputs.status }}
-    secrets:
-      META_REPO_TOKEN:
-        required: true
-      DASHBOARD_GIST_ID:
-        required: true
+  repository_dispatch:
+    types: [rebuild]
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: ploston-rebuild-${{ inputs.cascade_id || github.sha }}
+  group: ${{ github.repository }}-builds
   cancel-in-progress: false
 
 env:
+  DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
   IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
@@ -51,16 +24,15 @@ jobs:
       status: ${{ steps.result.outputs.status }}
       error: ${{ steps.result.outputs.error }}
       image_tag: ${{ env.IMAGE_TAG }}
-      sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract inputs
+      - name: Extract payload
         id: payload
         run: |
-          echo "cascade_id=${{ inputs.cascade_id }}" >> $GITHUB_OUTPUT
-          echo "core_version=${{ inputs.core_version }}" >> $GITHUB_OUTPUT
-          echo "source=${{ inputs.source }}" >> $GITHUB_OUTPUT
+          echo "cascade_id=${{ github.event.client_payload.cascade_id }}" >> $GITHUB_OUTPUT
+          echo "core_version=${{ github.event.client_payload.core_version }}" >> $GITHUB_OUTPUT
+          echo "source=${{ github.event.client_payload.source }}" >> $GITHUB_OUTPUT
 
       - name: Check for existing artifact (skip optimization)
         id: skip-check
@@ -174,9 +146,9 @@ jobs:
         uses: ostanlabs/ploston-core/.github/actions/update-dashboard@main
         with:
           repo: ploston
-          cascade_id: ${{ inputs.cascade_id }}
+          cascade_id: ${{ github.event.client_payload.cascade_id }}
           sha: ${{ github.sha }}
-          core_version: ${{ inputs.core_version }}
+          core_version: ${{ github.event.client_payload.core_version }}
           status: ${{ needs.rebuild.result == 'success' && 'success' || 'failure' }}
           error: ${{ needs.rebuild.outputs.error || '' }}
           artifact_image_tag: ${{ needs.rebuild.outputs.image_tag || '' }}
