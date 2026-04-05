@@ -5,15 +5,6 @@ on:
       message:
         type: string
         required: true
-    secrets:
-      META_REPO_TOKEN:
-        required: true
-      DASHBOARD_GIST_ID:
-        required: true
-    outputs:
-      result:
-        description: 'Test result'
-        value: ${{ jobs.echo-job.outputs.result }}
 
 permissions:
   contents: read
