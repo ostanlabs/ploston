@@ -9,25 +9,14 @@ on:
       result:
         description: 'Test result'
         value: ${{ jobs.echo-job.outputs.result }}
-    secrets:
-      META_REPO_TOKEN:
-        required: true
-      DASHBOARD_GIST_ID:
-        required: true
 
 concurrency:
   group: test-${{ inputs.message }}
   cancel-in-progress: false
 
-env:
-  TEST_TAG: sha-${{ github.sha }}
-
 jobs:
   echo-job:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     outputs:
       result: ${{ steps.out.outputs.result }}
     steps:
