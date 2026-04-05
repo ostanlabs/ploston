@@ -36,9 +36,6 @@ concurrency:
   group: ploston-rebuild-${{ inputs.cascade_id || github.sha }}
   cancel-in-progress: false
 
-env:
-  IMAGE_TAG: sha-${{ github.sha }}
-
 jobs:
   rebuild:
     runs-on: ubuntu-latest
@@ -49,16 +46,25 @@ jobs:
     outputs:
       status: ${{ steps.result.outputs.status }}
       error: ${{ steps.result.outputs.error }}
-      image_tag: ${{ env.IMAGE_TAG }}
-      sha: ${{ github.sha }}
+      image_tag: ${{ steps.repo-sha.outputs.image_tag }}
+      sha: ${{ steps.repo-sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ostanlabs/ploston
+
+      - name: Resolve repo SHA
+        id: repo-sha
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "image_tag=sha-$SHA" >> $GITHUB_OUTPUT
 
       - name: Check for existing artifact (skip optimization)
         id: skip-check
         run: |
           # Check if image exists with matching core_version label
-          EXISTING=$(docker manifest inspect ghcr.io/ostanlabs/ploston-dev:${{ env.IMAGE_TAG }} 2>/dev/null || echo "")
+          EXISTING=$(docker manifest inspect ghcr.io/ostanlabs/ploston-dev:${{ steps.repo-sha.outputs.image_tag }} 2>/dev/null || echo "")
           if [[ -n "$EXISTING" ]]; then
             # TODO: Check core_version label matches
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -143,13 +149,13 @@ jobs:
       - name: Build images
         if: steps.skip-check.outputs.skip != 'true'
         run: |
-          make build-image IMAGE_TAG=${{ env.IMAGE_TAG }} \
+          make build-image IMAGE_TAG=${{ steps.repo-sha.outputs.image_tag }} \
             CORE_VERSION=${{ inputs.core_version }} \
             CORE_SOURCE=${{ inputs.source }}
 
       - name: Push images
         if: steps.skip-check.outputs.skip != 'true'
-        run: make push-image IMAGE_TAG=${{ env.IMAGE_TAG }}
+        run: make push-image IMAGE_TAG=${{ steps.repo-sha.outputs.image_tag }}
 
       - name: Set result
         id: result
@@ -167,7 +173,7 @@ jobs:
         with:
           repo: ploston
           cascade_id: ${{ inputs.cascade_id }}
-          sha: ${{ github.sha }}
+          sha: ${{ needs.rebuild.outputs.sha }}
           core_version: ${{ inputs.core_version }}
           status: ${{ needs.rebuild.result == 'success' && 'success' || 'failure' }}
           error: ${{ needs.rebuild.outputs.error || '' }}

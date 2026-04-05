@@ -29,6 +29,8 @@ jobs:
       error: ${{ steps.result.outputs.error }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ostanlabs/ploston
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
