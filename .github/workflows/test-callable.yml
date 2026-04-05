@@ -1,0 +1,12 @@
+name: Test Callable
+on:
+  workflow_call:
+    inputs:
+      message:
+        type: string
+        required: true
+jobs:
+  echo-job:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.message }}"
