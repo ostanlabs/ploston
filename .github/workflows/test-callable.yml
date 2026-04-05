@@ -10,6 +10,9 @@ on:
         description: 'Test result'
         value: ${{ jobs.echo-job.outputs.result }}
 
+permissions:
+  contents: read
+
 concurrency:
   group: test-${{ inputs.message }}
   cancel-in-progress: false
