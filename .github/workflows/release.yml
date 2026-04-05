@@ -5,8 +5,6 @@ on:
     tags:
       - 'v*'
 
-env:
-  DASHBOARD_URL: https://gist.githubusercontent.com/ostanmarc/${{ secrets.DASHBOARD_GIST_ID }}/raw/dashboard.json
 
 jobs:
   verify-tested:
@@ -97,4 +95,3 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-

@@ -1,8 +1,24 @@
 name: Promote
 
 on:
-  repository_dispatch:
-    types: [promote]
+  workflow_call:
+    inputs:
+      source_tag:
+        description: 'Image tag to promote (sha-xxx format)'
+        required: true
+        type: string
+      cascade_id:
+        description: 'Cascade ID for dashboard verification'
+        required: true
+        type: string
+    outputs:
+      status:
+        value: ${{ jobs.promote.outputs.status }}
+    secrets:
+      META_REPO_TOKEN:
+        required: true
+      DASHBOARD_GIST_ID:
+        required: true
 
 jobs:
   promote:
@@ -14,12 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract payload
-        id: payload
-        run: |
-          echo "source_tag=${{ github.event.client_payload.source_tag }}" >> $GITHUB_OUTPUT
-          echo "cascade_id=${{ github.event.client_payload.cascade_id }}" >> $GITHUB_OUTPUT
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -30,7 +40,7 @@ jobs:
       - name: Promote images to edge
         id: promote
         run: |
-          SOURCE_TAG=${{ steps.payload.outputs.source_tag }}
+          SOURCE_TAG=${{ inputs.source_tag }}
 
           # Retag ploston-dev to edge
           docker buildx imagetools create \
@@ -68,7 +78,7 @@ jobs:
           set -e
 
           REPO="ploston"
-          CASCADE_ID="${{ github.event.client_payload.cascade_id }}"
+          CASCADE_ID="${{ inputs.cascade_id }}"
           STATUS="${{ needs.promote.result == 'success' && 'success' || 'failure' }}"
           ERROR="${{ needs.promote.outputs.error || '' }}"
           NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -123,4 +133,3 @@ jobs:
             echo "Response: $(echo "$UPDATE_RESPONSE" | sed '$d')"
             exit 1
           fi
-
