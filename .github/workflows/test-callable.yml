@@ -5,18 +5,10 @@ on:
       message:
         type: string
         required: true
-
-permissions:
-  contents: read
-  packages: write
-
-concurrency:
-  group: test-${{ inputs.message }}
-  cancel-in-progress: false
-
-env:
-  TEST_TAG: sha-${{ github.sha }}
-
+    outputs:
+      result:
+        description: 'Test result'
+        value: ${{ jobs.echo-job.outputs.result }}
 jobs:
   echo-job:
     runs-on: ubuntu-latest
