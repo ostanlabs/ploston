@@ -9,6 +9,11 @@ on:
       result:
         description: 'Test result'
         value: ${{ jobs.echo-job.outputs.result }}
+
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   echo-job:
     runs-on: ubuntu-latest
