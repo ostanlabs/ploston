@@ -39,22 +39,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.META_REPO_TOKEN }}
 
-      - name: Promote images to edge
+      - name: Promote images to edge + latest
         id: promote
         run: |
           SOURCE_TAG=${{ inputs.source_tag }}
 
-          # Retag ploston-dev to edge
+          # Retag ploston-dev to edge and latest
           docker buildx imagetools create \
             --tag ghcr.io/ostanlabs/ploston-dev:edge \
+            --tag ghcr.io/ostanlabs/ploston-dev:latest \
             ghcr.io/ostanlabs/ploston-dev:$SOURCE_TAG
 
-          # Retag native-tools-dev to edge
+          # Retag native-tools-dev to edge and latest
           docker buildx imagetools create \
             --tag ghcr.io/ostanlabs/native-tools-dev:edge \
+            --tag ghcr.io/ostanlabs/native-tools-dev:latest \
             ghcr.io/ostanlabs/native-tools-dev:$SOURCE_TAG
 
-          echo "Promoted $SOURCE_TAG to edge"
+          echo "Promoted $SOURCE_TAG to edge + latest"
 
       - name: Set result
         id: result
