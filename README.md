@@ -130,3 +130,8 @@ make docker-run   # Run in Docker
 ## License
 
 Apache-2.0
+
+## Disclaimer
+
+This project is developed independently in a personal capacity and is not affiliated with, endorsed by, or connected to any employer.
+No proprietary or confidential information from any employer has been used in this project.
