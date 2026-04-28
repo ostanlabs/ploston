@@ -1,22 +1,37 @@
 # Hello World Workflow
 #
-# A simple workflow that demonstrates basic AEL features.
+# Minimal smoke-test workflow. Mirrors the canonical seed shipped by
+# `ploston bootstrap` (see packages/ploston-cli/src/ploston_cli/bootstrap/
+# assets/workflows/hello_world.yaml). Returns {greeting: "Hello, <name>!"}.
 
-id: hello-world
-name: Hello World
-description: A simple example workflow
+name: hello_world
+version: "0.1.0"
+description: >
+  Minimal hello-world workflow. Takes an optional `name` input and returns
+  {greeting: "Hello, <name>!"}. Use this to smoke-test the ploston
+  workflow runtime (registration, input defaults, code-step execution,
+  output mapping) without touching any external MCP.
+tags:
+  - example
+  - hello-world
 
 inputs:
-  name:
-    type: string
-    description: Name to greet
-    default: "World"
+  - name:
+      type: string
+      default: "world"
+      description: "Name to greet. Defaults to 'world'."
+
+defaults:
+  timeout: 10
+  on_error: fail
 
 steps:
   - id: greet
-    name: Generate Greeting
     code: |
-      name = "{{ inputs.name }}"
-      result = f"Hello, {name}!"
+      who = context.inputs.get("name", "world") or "world"
+      result = {"greeting": "Hello, " + str(who) + "!"}
 
-output: "{{ steps.greet.output }}"
+outputs:
+  greeting:
+    from: steps.greet.output.greeting
+    description: "The greeting string, e.g. 'Hello, world!'"
