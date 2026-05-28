@@ -1,131 +1,127 @@
 # Ploston
 
-Ploston OSS - Deterministic Agent Execution Layer
+Ploston is a deterministic execution layer for AI agents. It sits between your agent (Claude, Cursor, Codex, or any MCP-capable client) and the tools your agent calls, turning conversational tool-use into repeatable, auditable workflows. Every tool call passes through the Control Plane, which records inputs, outputs, and timing into a structured execution log — so when a workflow fails at step 4, you can re-run steps 1–3 from cache and debug step 4 in isolation.
 
-## Overview
+<!-- TODO: embed T-685 hero GIF -->
 
-This package provides the open-source server, plugins, and workflows for the Ploston agent execution platform.
-
-## Installation
-
-### From PyPI
+## Quick Start
 
 ```bash
-pip install ploston
+# 1. Install the CLI
+pip install ploston-cli
+
+# 2. Bootstrap the Control Plane (Docker Compose by default)
+ploston bootstrap
+
+# 3. Inject Ploston into your agent's MCP config
+#    Supports: Claude Desktop, Cursor, Claude Code, Windsurf,
+#              Gemini CLI, Cline, VS Code Copilot, Codex, Zed
+ploston inject
+
+# 4. Restart your agent — Ploston MCP servers appear automatically
+
+# 5. Start building workflows conversationally, or run an existing one:
+ploston run my-workflow
 ```
 
-### From Source
+`ploston bootstrap` deploys the Control Plane, MCP bridge, and (optionally) a full observability stack locally:
+
+```bash
+# Include Grafana dashboards, ClickHouse, and OTEL Collector
+ploston bootstrap --with-observability
+```
+
+For the full walkthrough, see [`docs/QUICK_START.md`](docs/QUICK_START.md).
+
+## What the CLI Does
+
+| Command | Purpose |
+|---------|---------|
+| `ploston bootstrap` | Deploy Control Plane (Docker or Kubernetes) |
+| `ploston inject` | Inject Ploston MCP servers into agent configs |
+| `ploston inspector` | Start/stop the local Session Inspector web UI |
+| `ploston server add/list/remove` | Register upstream MCP servers |
+| `ploston workflows` | List and manage workflows |
+| `ploston run` | Execute a workflow |
+| `ploston executions` | Inspect execution history |
+| `ploston init` | Initialize configuration |
+| `ploston bridge` | Start MCP bridge to Control Plane |
+| `ploston runner` | Manage local tool-execution runners |
+| `ploston validate` | Validate workflow YAML |
+| `ploston tools` | List available tools |
+| `ploston config` | Manage CLI and server configuration |
+
+## Examples
+
+| Example | Description |
+|---------|-------------|
+| [`examples/ploston-config.yaml`](examples/ploston-config.yaml) | Reference configuration file |
+| [`examples/workflows/`](examples/workflows/) | Sample workflow definitions |
+
+## Architecture
+
+<!-- TODO: embed T-1074 architecture diagram -->
+
+```
+┌─────────────────┐     MCP (stdio)      ┌──────────────────────┐
+│  Claude Desktop │◄────────────────────►│   MCP Bridge         │
+│  Cursor / Codex │                      │   (ploston bridge)   │
+│  Claude Code    │                      └──────────┬───────────┘
+└─────────────────┘                                 │ HTTP
+                                                    ▼
+                                          ┌──────────────────────┐
+                                          │   Control Plane      │
+                                          │   (ploston-core)     │
+                                          │                      │
+                                          │  • Workflow engine   │
+                                          │  • Execution log     │
+                                          │  • Tool registry     │
+                                          │  • Auth + routing    │
+                                          └──────────┬───────────┘
+                                                     │ MCP / HTTP
+                                          ┌──────────┴───────────┐
+                                          │   Upstream MCP       │
+                                          │   Servers            │
+                                          │   (your tools)       │
+                                          └──────────────────────┘
+```
+
+## Configuration
+
+Ploston reads configuration from (in priority order):
+
+1. `ploston-config.yaml` in the current directory
+2. `~/.ploston/config.yaml` (user scope)
+3. Environment variables (`PLOSTON_HOST`, `PLOSTON_PORT`, etc.)
+4. CLI flags
+
+See [`examples/ploston-config.yaml`](examples/ploston-config.yaml) for all available options.
+
+## Docker
+
+```bash
+# Pull and run the Control Plane directly
+docker pull ostanlabs/ploston:latest
+docker run -d --name ploston -p 8022:8022 ostanlabs/ploston:latest
+```
+
+Or use `ploston bootstrap` which handles Docker Compose setup automatically.
+
+## Development
 
 ```bash
 git clone https://github.com/ostanlabs/ploston.git
 cd ploston
-make install
+make install    # requires Python 3.12+ and uv
+make test       # run all tests
+make check      # lint + tests
+make serve      # start server locally
 ```
 
-## Usage
+## Related Packages
 
-### Start the Server
-
-```bash
-# Using the CLI
-ploston-server --host 0.0.0.0 --port 8080
-
-# Or using make
-make serve
-```
-
-### Server Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--host` | `0.0.0.0` | Host to bind to |
-| `--port` | `8080` | Port for MCP HTTP server |
-| `--metrics-port` | `9090` | Port for Prometheus metrics |
-| `--reload` | `false` | Enable auto-reload for development |
-
-## Docker
-
-### Pull from Docker Hub
-
-```bash
-docker pull ostanlabs/ploston:latest
-```
-
-### Run with Docker
-
-```bash
-docker run -d \
-  --name ploston \
-  -p 8080:8080 \
-  -p 9090:9090 \
-  ostanlabs/ploston:latest
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PLOSTON_HOST` | `0.0.0.0` | Server host |
-| `PLOSTON_PORT` | `8080` | MCP HTTP port |
-| `PLOSTON_METRICS_PORT` | `9090` | Prometheus metrics port |
-| `PLOSTON_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
-
-### Docker Compose Example
-
-```yaml
-version: '3.8'
-services:
-  ploston:
-    image: ostanlabs/ploston:latest
-    ports:
-      - "8080:8080"
-      - "9090:9090"
-    environment:
-      - PLOSTON_LOG_LEVEL=INFO
-    restart: unless-stopped
-```
-
-### Build Locally
-
-```bash
-make docker-build
-make docker-run
-```
-
-## Development
-
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) package manager
-
-### Setup
-
-```bash
-make install
-```
-
-### Commands
-
-```bash
-make help         # Show all commands
-make test         # Run all tests
-make test-unit    # Run unit tests only
-make lint         # Run linter
-make format       # Format code
-make check        # Run lint + tests
-make serve        # Start server locally
-make docker-build # Build Docker image
-make docker-run   # Run in Docker
-```
-
-## Features
-
-- Workflow execution engine
-- Plugin system
-- MCP (Model Context Protocol) support
-- REST API
-- Prometheus metrics
+- [`ploston-cli`](https://github.com/ostanlabs/ploston-cli) — CLI client and local runner ([PyPI](https://pypi.org/project/ploston-cli/))
+- [`ploston-core`](https://github.com/ostanlabs/ploston-core) — Control Plane server and workflow engine
 
 ## License
 
