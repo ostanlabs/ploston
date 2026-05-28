@@ -57,6 +57,7 @@ For the full walkthrough, see [`docs/QUICK_START.md`](docs/QUICK_START.md).
 |---------|-------------|
 | [`examples/ploston-config.yaml`](examples/ploston-config.yaml) | Reference configuration file |
 | [`examples/workflows/`](examples/workflows/) | Sample workflow definitions |
+| [`examples/langchain-integration/`](examples/langchain-integration/) | LangChain agent using Ploston workflows as MCP tools |
 
 ## Architecture
 
