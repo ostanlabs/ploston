@@ -1,12 +1,12 @@
-# AEL Internal Validation
+# Ploston Internal Validation
 
-This directory contains configuration and workflows for validating AEL with the native_tools MCP server from the agent submodule.
+This directory contains configuration and workflows for validating Ploston with the native_tools MCP server from the agent submodule.
 
 ## Prerequisites
 
 ### Required
 
-- AEL MVP complete (all 13 components)
+- Ploston server package installed
 - Agent submodule initialized:
   ```bash
   git submodule update --init
@@ -31,9 +31,9 @@ For full tool coverage, you may need:
 
 2. **Edit values in `internal/.env`** (optional - defaults work for local services)
 
-3. **Start AEL:**
+3. **Start Ploston:**
    ```bash
-   ael -c internal/ael-config.yaml serve
+   ploston-server -c internal/ploston-config.yaml
    ```
 
 ## Testing Workflows
@@ -42,61 +42,44 @@ For full tool coverage, you may need:
 
 ```bash
 # Simple URL fetch
-ael run fetch-url --input url=https://httpbin.org/get
+ploston run fetch-url --input url=https://httpbin.org/get
 
 # File operations (no external services needed)
-ael run file-operations --input filename=test.txt --input content="Hello AEL!"
+ploston run file-operations --input filename=test.txt --input content="Hello Ploston!"
 
 # Python exec modes
-ael run python-exec-explicit --input numbers='[1,2,3,4,5]'
+ploston run python-exec-explicit --input numbers='[1,2,3,4,5]'
 
 # Fetch and publish to Kafka (requires Kafka)
-ael run fetch-and-publish --input url=https://httpbin.org/get --input topic=events
+ploston run fetch-and-publish --input url=https://httpbin.org/get --input topic=events
 ```
 
 ### Via MCP Test Client
 
-The `mcp_test_client.py` utility simulates an MCP client (like Claude Desktop) for faster testing:
+The `mcp_http_test_client.py` utility simulates an MCP client (like Claude Desktop) for faster testing:
 
 ```bash
 # List all available tools
-python internal/mcp_test_client.py -c internal/ael-config.yaml --list-tools
+python internal/mcp_http_test_client.py --list-tools
 
 # Call a tool directly
-python internal/mcp_test_client.py -c internal/ael-config.yaml \
+python internal/mcp_http_test_client.py \
   --call http_request '{"url": "https://httpbin.org/get", "method": "GET"}'
 
 # Run a workflow
-python internal/mcp_test_client.py -c internal/ael-config.yaml \
+python internal/mcp_http_test_client.py \
   --workflow fetch-url '{"url": "https://httpbin.org/get"}'
 
 # Interactive mode (REPL)
-python internal/mcp_test_client.py -c internal/ael-config.yaml
+python internal/mcp_http_test_client.py
 # Then use: init, list, call <tool> <json>, workflow <name> <json>, ping, quit
 ```
 
 ### Via Claude Desktop
 
-1. Add AEL to Claude Desktop config (see below)
-2. Ask Claude: "Call workflow:fetch-url with url https://httpbin.org/get"
-
-## Claude Desktop Integration
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "ael": {
-      "command": "/path/to/agent-execution-layer/.venv/bin/ael",
-      "args": ["-c", "internal/ael-config.yaml", "serve"],
-      "cwd": "/path/to/agent-execution-layer"
-    }
-  }
-}
-```
-
-Replace `/path/to/agent-execution-layer` with your actual path (e.g., `/Users/yourname/code/agent-execution-layer`).
+1. Run `ploston bootstrap` to deploy the Control Plane
+2. Run `ploston inject` to inject MCP bridge config into Claude Desktop
+3. Ask Claude: "Run the fetch-url workflow with url https://httpbin.org/get"
 
 ## Available Workflows
 
@@ -146,5 +129,4 @@ Or set `FIRECRAWL_API_KEY` for cloud Firecrawl.
 
 ### Python import errors
 
-Ensure you're running from the `agent-execution-layer` root directory.
-
+Ensure you're running from the repository root directory.
