@@ -125,10 +125,14 @@ jobs:
       - name: Lint
         if: steps.skip-check.outputs.skip != 'true'
         run: make lint
+        env:
+          UV_NO_SYNC: "1"
 
       - name: Unit tests
         if: steps.skip-check.outputs.skip != 'true'
         run: make test-unit
+        env:
+          UV_NO_SYNC: "1"
 
       - name: Log in to GHCR
         if: steps.skip-check.outputs.skip != 'true'
