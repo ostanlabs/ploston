@@ -468,21 +468,24 @@ class TestResourceLimits:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
+    @pytest.mark.timeout(20)
     async def test_sec_010_timeout_enforcement(
         self,
         sandbox_context_dict: dict,
     ):
         """
-        SEC-010: Verify execution timeout is enforced.
+        SEC-010: Verify the wall-clock timeout HARD-KILLS a blocking infinite
+        loop (CR-1 process isolation).
 
-        Note: asyncio.wait_for cannot interrupt blocking code like time.sleep().
-        This test verifies the timeout mechanism exists but may not actually
-        timeout due to Python's GIL. In production, process-level timeouts
-        would be used.
+        Before CR-1 the sandbox ran code in-process via ``asyncio.wait_for``,
+        which cannot interrupt ``while True: pass`` — the event loop never gets
+        control, so the "timeout" never fires and the process hangs. With
+        process isolation the parent SIGKILLs the child when the deadline
+        passes. The ``@pytest.mark.timeout`` turns any regression to the old
+        behaviour (a hang) into a hard failure rather than an infinite run.
         """
         check_imports()
 
-        # Create sandbox with short timeout
         config = SandboxConfig(timeout=2, max_tool_calls=10)
         sandbox = PythonExecSandbox(
             tool_caller=None,
@@ -491,29 +494,28 @@ class TestResourceLimits:
             max_output_size=1024 * 1024,
         )
 
-        # Use async sleep which can be interrupted by asyncio.wait_for
-        code = """
-import asyncio
-# This won't work because exec() runs synchronously
-# Just verify the sandbox accepts the code
-result = "completed"
-"""
-        result = await sandbox.execute(code, context=sandbox_context_dict)
+        import time as _time
 
-        # For now, just verify execution works
-        # True timeout enforcement requires process-level isolation
-        assert result is not None
+        code = "while True:\n    pass\n"
+        start = _time.perf_counter()
+        result = await sandbox.execute(code, context=sandbox_context_dict)
+        elapsed = _time.perf_counter() - start
+
+        assert result.success is False, "Infinite loop must be aborted, not succeed"
+        assert result.error is not None
+        assert "timeout" in result.error.lower()
+        # Must abort within a few seconds of the 2s budget (i.e. be hard-killed).
+        assert elapsed < 10, f"Took {elapsed:.1f}s — timeout did not hard-kill the child"
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(20)
     async def test_sec_010b_cpu_intensive_timeout(
         self,
         sandbox_context_dict: dict,
     ):
         """
-        SEC-010b: Verify CPU-intensive operations also timeout.
-
-        Note: asyncio.wait_for cannot interrupt blocking CPU-bound code.
-        This test is marked as a known limitation.
+        SEC-010b: Verify a CPU-bound busy loop (no awaits) is interrupted by
+        the wall-clock timeout via process isolation (CR-1).
         """
         check_imports()
 
@@ -525,15 +527,18 @@ result = "completed"
             max_output_size=1024 * 1024,
         )
 
-        # Simple code that completes quickly
-        code = """
-result = 42
-"""
-        result = await sandbox.execute(code, context=sandbox_context_dict)
+        import time as _time
 
-        # Verify execution works
-        assert result.success is True
-        assert result.result == 42
+        # Heavy CPU loop with no opportunity for the event loop to preempt.
+        code = "n = 0\nwhile n < 10**18:\n    n += 1\nresult = n\n"
+        start = _time.perf_counter()
+        result = await sandbox.execute(code, context=sandbox_context_dict)
+        elapsed = _time.perf_counter() - start
+
+        assert result.success is False, "CPU-bound loop must be aborted"
+        assert result.error is not None
+        assert "timeout" in result.error.lower()
+        assert elapsed < 10, f"Took {elapsed:.1f}s — CPU loop was not interrupted"
 
 
 # =============================================================================
@@ -642,32 +647,46 @@ def broken(
         assert len(errors) > 0, "Syntax error should be caught"
 
     @pytest.mark.parametrize(
-        "injection_attempt",
+        "injection_code",
         [
-            "'; import os; os.system('ls'); '",
-            "\\n__import__('os').system('ls')\\n",
+            # Real injected statements (not string literals): each attempts a
+            # sandbox escape and MUST be blocked, either at static validation
+            # (errors returned) or at execution (result.success is False).
+            "import os\nresult = os.system('ls')\n",
+            "result = __import__('os').system('ls')\n",
+            "result = eval(\"__import__('os').system('ls')\")\n",
+            "result = open('/etc/passwd').read()\n",
         ],
     )
-    def test_sec_012_injection_patterns(
+    @pytest.mark.asyncio
+    @pytest.mark.timeout(20)
+    async def test_sec_012_injection_patterns(
         self,
         sandbox: "PythonExecSandbox",
-        injection_attempt: str,
+        sandbox_context_dict: dict,
+        injection_code: str,
     ):
         """
-        SEC-012d: Verify injection patterns are caught.
+        SEC-012d: Verify injection patterns are actually BLOCKED.
+
+        Previously this test called ``validate_code`` and asserted nothing —
+        a false green. We now assert each attack is rejected: blocked at
+        static validation (non-empty errors) OR fails at execution time
+        (``result.success is False``). Either way the escape never runs.
         """
         check_imports()
 
-        code = f"""
-user_input = "{injection_attempt}"
-result = user_input
-"""
-        # Even if the code is syntactically valid,
-        # it shouldn't be able to execute dangerous imports
-        sandbox.validate_code(code)
-        # Note: The injection is in a string, so it may pass validation
-        # but actual execution with os import would fail
-        # This test ensures we have validation infrastructure
+        # Static validation should flag most of these (os import, __import__,
+        # eval, open). If it does, that alone proves the gate works.
+        errors = sandbox.validate_code(injection_code)
+
+        # And execution must never succeed regardless.
+        result = await sandbox.execute(injection_code, context=sandbox_context_dict)
+
+        assert errors or (result.success is False), (
+            f"Injection must be blocked but slipped through: {injection_code!r} "
+            f"(errors={errors}, success={result.success})"
+        )
 
 
 # =============================================================================
