@@ -14,8 +14,9 @@ from __future__ import annotations
 import sys
 from unittest.mock import AsyncMock, patch
 
-import ploston
 import pytest
+
+import ploston
 from ploston import defaults, server
 
 # =============================================================================
