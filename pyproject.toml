@@ -90,13 +90,9 @@ source = ["ploston"]
 # Docker image (docker/native-tools/Dockerfile: `CMD python -m ploston.native_tools.server`),
 # wrapping ploston_core.native_tools implementations. It must be measured; it is
 # currently live-but-untested (see REMEDIATION_PLAN.md Area H — fs/SSRF + tool tests).
-# `ploston.plugins` has no importer in the OSS runtime, no entry point, and no test;
-# it appears to be a legacy duplicate of ploston_core's plugin system. It is omitted
-# only pending dead-code confirmation + deletion in Phase 3, so it does not distort
-# the live-surface number. Do NOT omit native_tools.
-omit = [
-    "*/ploston/plugins/*",
-]
+# `ploston.plugins` was a legacy duplicate of ploston_core's plugin system with
+# no importer, entry point, or test; it has been deleted, so no coverage omit is
+# needed. Do NOT omit native_tools.
 
 [tool.coverage.paths]
 source = ["src/ploston", "*/ploston"]
