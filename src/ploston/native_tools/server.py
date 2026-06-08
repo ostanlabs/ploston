@@ -115,6 +115,12 @@ _cfg = get_config()
 
 # These are accessed by tools - they get updated when config changes
 WORKSPACE_DIR = _cfg.workspace_dir
+# Security config (PL-C5) consumed by fs / network tools.
+MAX_FILE_SIZE = _cfg.max_file_size
+ALLOWED_PATHS = _cfg.allowed_paths
+DENIED_PATHS = _cfg.denied_paths
+ALLOWED_HOSTS = _cfg.allowed_hosts
+DENIED_HOSTS = _cfg.denied_hosts
 FIRECRAWL_BASE_URL = _cfg.firecrawl_base_url
 FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
 KAFKA_BOOTSTRAP_SERVERS = _cfg.kafka_bootstrap_servers
@@ -136,8 +142,14 @@ def _update_config_globals(new_config: ToolConfig) -> None:
     global KAFKA_BOOTSTRAP_SERVERS, KAFKA_CLIENT_ID, KAFKA_SECURITY_PROTOCOL
     global KAFKA_SASL_MECHANISM, KAFKA_SASL_USERNAME, KAFKA_SASL_PASSWORD
     global OLLAMA_HOST, DEFAULT_EMBEDDING_MODEL
+    global MAX_FILE_SIZE, ALLOWED_PATHS, DENIED_PATHS, ALLOWED_HOSTS, DENIED_HOSTS
 
     WORKSPACE_DIR = new_config.workspace_dir
+    MAX_FILE_SIZE = new_config.max_file_size
+    ALLOWED_PATHS = new_config.allowed_paths
+    DENIED_PATHS = new_config.denied_paths
+    ALLOWED_HOSTS = new_config.allowed_hosts
+    DENIED_HOSTS = new_config.denied_hosts
     FIRECRAWL_BASE_URL = new_config.firecrawl_base_url
     FIRECRAWL_API_KEY = new_config.firecrawl_api_key
     KAFKA_BOOTSTRAP_SERVERS = new_config.kafka_bootstrap_servers
@@ -171,7 +183,13 @@ if is_running_in_docker():
 def fs_read(path: str, encoding: str = "utf-8", format: str = "text") -> Dict[str, Any]:
     """Read content from a file with format parsing."""
     return read_file_content(
-        path=path, workspace_dir=WORKSPACE_DIR, encoding=encoding, format=format
+        path=path,
+        workspace_dir=WORKSPACE_DIR,
+        encoding=encoding,
+        format=format,
+        max_file_size=MAX_FILE_SIZE,
+        allowed_paths=ALLOWED_PATHS,
+        denied_paths=DENIED_PATHS,
     )
 
 
@@ -193,6 +211,9 @@ def fs_write(
         encoding=encoding,
         overwrite=overwrite,
         create_dirs=create_dirs,
+        max_file_size=MAX_FILE_SIZE,
+        allowed_paths=ALLOWED_PATHS,
+        denied_paths=DENIED_PATHS,
     )
 
 
@@ -214,13 +235,21 @@ def fs_list(
         include_files=include_files,
         include_dirs=include_dirs,
         include_hidden=include_hidden,
+        allowed_paths=ALLOWED_PATHS,
+        denied_paths=DENIED_PATHS,
     )
 
 
 @mcp.tool()
 def fs_delete(path: str, recursive: bool = False) -> Dict[str, Any]:
     """Delete a file or directory."""
-    return delete_file_or_directory(path=path, workspace_dir=WORKSPACE_DIR, recursive=recursive)
+    return delete_file_or_directory(
+        path=path,
+        workspace_dir=WORKSPACE_DIR,
+        recursive=recursive,
+        allowed_paths=ALLOWED_PATHS,
+        denied_paths=DENIED_PATHS,
+    )
 
 
 # =============================================================================
@@ -249,6 +278,8 @@ async def http_request(
         timeout=timeout,
         max_retries=max_retries,
         retry_delay=retry_delay,
+        allowed_hosts=ALLOWED_HOSTS,
+        denied_hosts=DENIED_HOSTS,
     )
 
 
