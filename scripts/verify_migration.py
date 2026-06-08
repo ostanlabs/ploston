@@ -26,7 +26,7 @@ def check_import_compatibility():
         ("ploston_core.api.app", "create_rest_app"),
         ("ploston_core.types", "MCPTransport"),
         ("ploston.server", "main"),
-        ("ploston.workflow", "WorkflowRegistry"),
+        ("ploston_core.workflow", "WorkflowRegistry"),
     ]
 
     for module, attr in imports_to_check:
