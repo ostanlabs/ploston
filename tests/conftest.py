@@ -16,6 +16,25 @@ import yaml
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# =============================================================================
+# Subprocess coverage
+# =============================================================================
+# Several integration/smoke tests spawn the real server out-of-process
+# (`python -m ploston.server`). Without help, coverage.py only instruments the
+# pytest process and reports ~1% for the `ploston` package even though the
+# spawned server exercises ploston.server / ploston.defaults.
+#
+# The virtualenv ships a `.pth` hook that calls `coverage.process_startup()`
+# whenever COVERAGE_PROCESS_START is set, so we point it at this package's
+# pyproject.toml (which holds [tool.coverage.run] with parallel=true). The env
+# var is inherited by subprocesses spawned via subprocess.Popen/run, so their
+# coverage data is written to .coverage.* files and combined automatically by
+# pytest-cov at the end of the run.
+os.environ.setdefault(
+    "COVERAGE_PROCESS_START",
+    str(Path(__file__).parent.parent / "pyproject.toml"),
+)
+
 
 # =============================================================================
 # Path Fixtures
@@ -140,29 +159,9 @@ def workflow_runner(ael_cli: Callable, workflows_dir: Path) -> Callable:
 # =============================================================================
 
 
-def pytest_configure(config):
-    """Configure custom markers."""
-    config.addinivalue_line("markers", "integration: Integration tests")
-    config.addinivalue_line("markers", "unit: Unit tests")
-    config.addinivalue_line("markers", "workflow: Workflow engine tests")
-    config.addinivalue_line("markers", "registry: Registry tests")
-    config.addinivalue_line("markers", "security: Security tests")
-    config.addinivalue_line("markers", "cli: CLI tests")
-    config.addinivalue_line("markers", "slow: Slow tests")
-    config.addinivalue_line("markers", "mcp_client: MCP client integration tests")
-    config.addinivalue_line("markers", "mcp_http_client: MCP HTTP client integration tests")
-    config.addinivalue_line("markers", "frontend: MCP frontend tests")
-    config.addinivalue_line("markers", "homelab: Homelab K3s deployment integration tests")
-    config.addinivalue_line("markers", "smoke: Server smoke tests")
-    config.addinivalue_line("markers", "parity: Migration parity tests (AEL vs Ploston)")
-    config.addinivalue_line(
-        "markers",
-        "requires_running_mode: Tests that require AEL to be in running mode (not configuration mode)",
-    )
-    config.addinivalue_line(
-        "markers",
-        "requires_server: Tests that require a running Ploston server (skipped in CI without server)",
-    )
+# NOTE: Custom markers are registered declaratively in pyproject.toml under
+# [tool.pytest.ini_options].markers (the single source of truth, enforced via
+# --strict-markers). Do not re-register them here.
 
 
 def pytest_addoption(parser):

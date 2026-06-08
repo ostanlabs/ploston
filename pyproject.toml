@@ -30,6 +30,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.3.0",
     "ruff>=0.2.0",
     "fastmcp>=3.2.0",  # For testing native tools server
 ]
@@ -56,6 +57,52 @@ ignore = ["E501", "E402"]  # E402: Module level import not at top of file (neede
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+timeout = 60
+markers = [
+    "integration: integration tests exercising real components/processes",
+    "unit: fast in-process unit tests",
+    "workflow: workflow engine tests",
+    "registry: tool registry tests",
+    "security: security / sandbox tests",
+    "cli: CLI tests",
+    "slow: tests that take a long time to run",
+    "smoke: server smoke tests that start the real server",
+    "frontend: MCP frontend tests",
+    "parity: migration parity tests (AEL vs Ploston)",
+    "mcp_client: MCP client integration tests",
+    "mcp_http_client: MCP HTTP client integration tests",
+    "homelab: homelab K3s deployment integration tests",
+    "requires_running_mode: tests that require AEL to be in running mode (not configuration mode)",
+    "requires_server: tests that require a running Ploston server (skipped in CI without server)",
+]
+
+[tool.coverage.run]
+branch = false
+# parallel=true lets coverage combine data from spawned subprocesses
+# (e.g. `python -m ploston.server` in the smoke tests) when they flush
+# cleanly. The smoke server is killed via SIGTERM, which bypasses coverage's
+# atexit flush, so the real OSS surface is measured by the in-process tests in
+# tests/unit/test_server_inprocess.py instead.
+parallel = true
+source = ["ploston"]
+# NOTE: `ploston.native_tools` IS LIVE — it is the entrypoint of the native-tools
+# Docker image (docker/native-tools/Dockerfile: `CMD python -m ploston.native_tools.server`),
+# wrapping ploston_core.native_tools implementations. It must be measured; it is
+# currently live-but-untested (see REMEDIATION_PLAN.md Area H — fs/SSRF + tool tests).
+# `ploston.plugins` has no importer in the OSS runtime, no entry point, and no test;
+# it appears to be a legacy duplicate of ploston_core's plugin system. It is omitted
+# only pending dead-code confirmation + deletion in Phase 3, so it does not distort
+# the live-surface number. Do NOT omit native_tools.
+omit = [
+    "*/ploston/plugins/*",
+]
+
+[tool.coverage.paths]
+source = ["src/ploston", "*/ploston"]
+
+[tool.coverage.report]
+show_missing = true
 
 [dependency-groups]
 dev = [
