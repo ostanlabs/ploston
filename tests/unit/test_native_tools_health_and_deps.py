@@ -17,13 +17,12 @@ import sys
 import types
 
 import pytest
+from ploston.native_tools import server as srv
 from ploston_core.native_tools import (
     DependencyUnavailableError,
     get_health_manager,
 )
 from ploston_core.native_tools.health import reset_health_manager
-
-from ploston.native_tools import server as srv
 
 
 @pytest.fixture()
@@ -51,14 +50,14 @@ class TestDependencyGating:
         )
         assert clean_health_manager.is_dependency_healthy("kafka") is False
         with pytest.raises(DependencyUnavailableError):
-            await srv.kafka_list_topics.fn()
+            await srv.kafka_list_topics()
 
     @pytest.mark.asyncio
     async def test_unhealthy_ollama_blocks_classify(self, clean_health_manager):
         clean_health_manager.configure_ollama(host="http://ollama:11434")
         assert clean_health_manager.is_dependency_healthy("ollama") is False
         with pytest.raises(DependencyUnavailableError):
-            await srv.ml_classify_text.fn("text", ["a", "b"])
+            await srv.ml_classify_text("text", ["a", "b"])
 
     @pytest.mark.asyncio
     async def test_healthy_when_dependency_unconfigured(self, clean_health_manager):
@@ -76,7 +75,7 @@ class TestDependencyGating:
 class TestHealthEndpoints:
     @pytest.mark.asyncio
     async def test_health_check_tool_returns_envelope(self, clean_health_manager):
-        result = await srv.health_check.fn()
+        result = await srv.health_check()
         assert result["service"] == "native-tools"
         assert "status" in result
         assert "config" in result
@@ -152,7 +151,7 @@ def fake_kafka(monkeypatch):
 class TestKafkaConsumeHealth:
     @pytest.mark.asyncio
     async def test_consume_decodes_json_and_text(self, fake_kafka, clean_health_manager):
-        result = await srv.kafka_consume.fn("events", max_messages=10)
+        result = await srv.kafka_consume("events", max_messages=10)
         assert result["success"] is True
         assert result["message_count"] == 2
         # First message decoded as JSON, second as plain text.
@@ -163,7 +162,7 @@ class TestKafkaConsumeHealth:
 
     @pytest.mark.asyncio
     async def test_kafka_health_reports_healthy(self, fake_kafka, clean_health_manager):
-        result = await srv.kafka_health.fn()
+        result = await srv.kafka_health()
         assert result["success"] is True
         assert result["status"] == "healthy"
         assert result["topic_count"] == 3
@@ -285,7 +284,7 @@ class TestMlClassify:
             "sports": [1.0, 0.0, 0.0],
             "weather": [0.0, 1.0, 0.0],
         }
-        result = await srv.ml_classify_text.fn("the match score", ["sports", "weather"])
+        result = await srv.ml_classify_text("the match score", ["sports", "weather"])
         assert result["success"] is True
         assert result["category"] == "sports"
         assert result["confidence"] == pytest.approx(1.0, abs=1e-6)

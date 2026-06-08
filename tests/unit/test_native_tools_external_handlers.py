@@ -15,7 +15,6 @@ import types
 from typing import Any
 
 import pytest
-
 from ploston.native_tools import server as srv
 
 # --------------------------------------------------------------------------- #
@@ -136,9 +135,7 @@ class TestHttpRequest:
             status_code=200, json_data={"hello": "world"}, text='{"hello":"world"}'
         )
 
-        result = await srv.http_request.fn(
-            "http://example.com/api", method="get", params={"q": "x"}
-        )
+        result = await srv.http_request("http://example.com/api", method="get", params={"q": "x"})
         assert result["success"] is True
         assert result["status_code"] == 200
         assert result["data"] == {"hello": "world"}
@@ -154,7 +151,7 @@ class TestHttpRequest:
         monkeypatch.setattr(net, "_resolve_host_ips", lambda host: ["93.184.216.34"])
         fake_httpx.response = _FakeResponse(status_code=201, json_data={"id": 1}, text="{}")
 
-        result = await srv.http_request.fn(
+        result = await srv.http_request(
             "http://example.com/items", method="POST", data={"name": "n"}
         )
         assert result["success"] is True
@@ -164,7 +161,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_empty_url_error_envelope(self, fake_httpx):
-        result = await srv.http_request.fn("")
+        result = await srv.http_request("")
         assert result["success"] is False
         assert "URL is required" in result["error"]
 
@@ -172,7 +169,7 @@ class TestHttpRequest:
     async def test_ssrf_block_for_loopback(self, fake_httpx):
         # No DNS monkeypatch: 127.0.0.1 is a literal loopback IP and must be
         # rejected by the SSRF guard before any send.
-        result = await srv.http_request.fn("http://127.0.0.1/secret")
+        result = await srv.http_request("http://127.0.0.1/secret")
         assert result["success"] is False
         assert "SSRF" in result["error"]
 
@@ -188,7 +185,7 @@ class TestMlOllamaBacked:
         fake_httpx.response = _FakeResponse(
             status_code=200, json_data={"embedding": [0.1, 0.2, 0.3]}, text="{}"
         )
-        result = await srv.ml_embed_text.fn("hello", model="custom-model")
+        result = await srv.ml_embed_text("hello", model="custom-model")
         assert result["success"] is True
         assert result["embedding"] == [0.1, 0.2, 0.3]
         # Ollama embeddings endpoint + payload shaping.
@@ -199,7 +196,7 @@ class TestMlOllamaBacked:
 
     @pytest.mark.asyncio
     async def test_embed_text_empty_input_error(self, fake_httpx):
-        result = await srv.ml_embed_text.fn("")
+        result = await srv.ml_embed_text("")
         assert result["success"] is False
         assert "Text is required" in result["error"]
 
@@ -209,7 +206,7 @@ class TestMlOllamaBacked:
         fake_httpx.response = _FakeResponse(
             status_code=200, json_data={"embedding": [1.0, 0.0, 0.0]}, text="{}"
         )
-        result = await srv.ml_text_similarity.fn("a", "b", method="cosine")
+        result = await srv.ml_text_similarity("a", "b", method="cosine")
         assert result["success"] is True
         assert result["method"] == "cosine"
         assert result["similarity"] == pytest.approx(1.0, abs=1e-6)
@@ -220,7 +217,7 @@ class TestMlLocalMethods:
 
     @pytest.mark.asyncio
     async def test_jaccard_similarity(self):
-        result = await srv.ml_text_similarity.fn(
+        result = await srv.ml_text_similarity(
             "hello world foo", "hello world bar", method="jaccard"
         )
         assert result["success"] is True
@@ -229,25 +226,25 @@ class TestMlLocalMethods:
 
     @pytest.mark.asyncio
     async def test_unknown_method_error(self):
-        result = await srv.ml_text_similarity.fn("a", "b", method="bogus")
+        result = await srv.ml_text_similarity("a", "b", method="bogus")
         assert result["success"] is False
         assert "Unknown similarity method" in result["error"]
 
     @pytest.mark.asyncio
     async def test_sentiment_positive(self):
-        result = await srv.ml_analyze_sentiment.fn("I love this wonderful happy great thing")
+        result = await srv.ml_analyze_sentiment("I love this wonderful happy great thing")
         assert result["success"] is True
         assert result["sentiment"] == "positive"
 
     @pytest.mark.asyncio
     async def test_sentiment_negative(self):
-        result = await srv.ml_analyze_sentiment.fn("terrible awful horrible bad")
+        result = await srv.ml_analyze_sentiment("terrible awful horrible bad")
         assert result["success"] is True
         assert result["sentiment"] == "negative"
 
     @pytest.mark.asyncio
     async def test_sentiment_empty_error(self):
-        result = await srv.ml_analyze_sentiment.fn("")
+        result = await srv.ml_analyze_sentiment("")
         assert result["success"] is False
 
 
@@ -266,7 +263,7 @@ class TestFirecrawl:
             json_data={"success": True, "data": [{"url": "https://a"}, {"url": "https://b"}]},
             text="{}",
         )
-        result = await srv.firecrawl_search.fn("python", limit=5)
+        result = await srv.firecrawl_search("python", limit=5)
         assert result["success"] is True
         assert result["result_count"] == 2
         assert result["query"] == "python"
@@ -287,7 +284,7 @@ class TestFirecrawl:
             },
             text="{}",
         )
-        result = await srv.firecrawl_map.fn("https://x.com")
+        result = await srv.firecrawl_map("https://x.com")
         assert result["success"] is True
         assert result["total_urls"] == 2
         assert fake_httpx.last_request["url"] == "http://fc:3002/v1/map"
@@ -303,7 +300,7 @@ class TestFirecrawl:
             json_data={"success": True, "data": {"title": "T"}},
             text="{}",
         )
-        result = await srv.firecrawl_extract.fn(
+        result = await srv.firecrawl_extract(
             ["https://x.com"], schema={"type": "object"}, prompt="get title"
         )
         assert result["success"] is True
@@ -318,7 +315,7 @@ class TestFirecrawl:
     async def test_health_reports_healthy(self, fake_httpx, monkeypatch):
         monkeypatch.setattr(srv, "FIRECRAWL_BASE_URL", "http://fc:3002")
         fake_httpx.response = _FakeResponse(status_code=200, text="ok")
-        result = await srv.firecrawl_health.fn()
+        result = await srv.firecrawl_health()
         assert result["success"] is True
         assert result["status"] == "healthy"
         assert result["response_code"] == 200
@@ -401,7 +398,7 @@ class TestKafka:
     async def test_publish_wires_config_and_returns_metadata(self, fake_kafka, monkeypatch):
         monkeypatch.setattr(srv, "KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
         monkeypatch.setattr(srv, "KAFKA_CLIENT_ID", "cid")
-        result = await srv.kafka_publish.fn("events", {"x": 1}, key="k1")
+        result = await srv.kafka_publish("events", {"x": 1}, key="k1")
         assert result["success"] is True
         assert result["topic"] == "events"
         assert result["partition"] == 0
@@ -417,14 +414,14 @@ class TestKafka:
 
     @pytest.mark.asyncio
     async def test_list_topics_returns_sorted(self, fake_kafka):
-        result = await srv.kafka_list_topics.fn()
+        result = await srv.kafka_list_topics()
         assert result["success"] is True
         assert result["topics"] == ["topic-a", "topic-b"]
         assert result["topic_count"] == 2
 
     @pytest.mark.asyncio
     async def test_create_topic(self, fake_kafka):
-        result = await srv.kafka_create_topic.fn("new-topic", num_partitions=3)
+        result = await srv.kafka_create_topic("new-topic", num_partitions=3)
         assert result["success"] is True
         assert result["topic"] == "new-topic"
 
@@ -433,4 +430,4 @@ class TestKafka:
         # No fake_kafka fixture: ensure the lazy import fails => ImportError.
         monkeypatch.setitem(sys.modules, "kafka", None)
         with pytest.raises(ImportError):
-            await srv.kafka_publish.fn("t", "m")
+            await srv.kafka_publish("t", "m")
