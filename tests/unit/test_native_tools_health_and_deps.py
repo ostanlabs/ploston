@@ -17,12 +17,13 @@ import sys
 import types
 
 import pytest
-from ploston.native_tools import server as srv
 from ploston_core.native_tools import (
     DependencyUnavailableError,
     get_health_manager,
 )
 from ploston_core.native_tools.health import reset_health_manager
+
+from ploston.native_tools import server as srv
 
 
 @pytest.fixture()
